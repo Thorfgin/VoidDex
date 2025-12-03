@@ -1,3 +1,4 @@
+import React from 'react';
 import { render } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
@@ -6,12 +7,12 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
  * Handles paths with query parameters correctly by splitting pathname and search.
  */
 export const renderWithRouter = (
-  component: React.ReactElement,
-  path: string = '/',
-  state: any = null
+    component: React.ReactElement,
+    path: string = '/',
+    state: any = null
 ) => {
   const [pathname, search] = path.split('?');
-  
+
   const initialEntry = {
     pathname: pathname,
     search: search ? `?${search}` : '',
@@ -19,11 +20,11 @@ export const renderWithRouter = (
   };
 
   return render(
-    <MemoryRouter initialEntries={[initialEntry]}>
-      <Routes>
-        <Route path={pathname} element={component} />
-        {pathname !== '/' && <Route path="/" element={<div>Dashboard</div>} />}
-      </Routes>
-    </MemoryRouter>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path={pathname} element={component} />
+          {pathname !== '/' && <Route path="/" element={<div>Dashboard</div>} />}
+        </Routes>
+      </MemoryRouter>
   );
 };
