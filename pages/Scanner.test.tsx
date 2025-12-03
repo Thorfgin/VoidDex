@@ -11,21 +11,26 @@ jest.mock('react-router-dom', () => ({
 
 describe('Scanner Page', () => {
   let scanSuccessCallback: (decodedText: string, decodedResult: any) => void;
+  const mockStart = jest.fn((onSuccess: (decodedText: string, decodedResult: any) => void) => {
+    scanSuccessCallback = onSuccess;
+    return Promise.resolve();
+  });
+  const mockStop = jest.fn(() => Promise.resolve());
+  const mockClear = jest.fn();
 
   beforeAll(() => {
     (window as any).Html5Qrcode = class {
       constructor() {}
-      start(_config: any, _settings: any, onSuccess: any) { 
-          scanSuccessCallback = onSuccess;
-          return Promise.resolve(); 
-      }
-      stop() { return Promise.resolve(); }
-      clear() {}
+      start = mockStart;
+      stop = mockStop;
+      clear = mockClear;
+      isScanning = false;
     };
   });
 
   beforeEach(() => {
-      jest.clearAllMocks();
+    jest.clearAllMocks();
+    // Reset mock implementations if needed, but keeping simple references is usually safer here
   });
 
   test('renders scanner container', async () => {
@@ -42,21 +47,23 @@ describe('Scanner Page', () => {
     await waitFor(() => expect(scanSuccessCallback).toBeDefined());
 
     if (scanSuccessCallback) {
-        scanSuccessCallback("https://voiddex.app/items/1234", {});
-        expect(mockNavigate).toHaveBeenCalledWith('/items/1234');
+      scanSuccessCallback("https://voiddex.app/items/1234", {});
+      expect(mockNavigate).toHaveBeenCalledWith('/items/1234');
     } else {
-        throw new Error("Callback not registered");
+      throw new Error("Callback not registered");
     }
   });
 
-  test('displays error if camera fails (simulated)', async () => {
-    (window as any).Html5Qrcode = class {
-      constructor() {}
-      start() { return Promise.reject(new Error("Permission denied")); }
-    };
+  test('displays error if camera fails', async () => {
+    // Override start to fail
+    const originalStart = (window as any).Html5Qrcode.prototype.start;
+    (window as any).Html5Qrcode.prototype.start = jest.fn(() => Promise.reject(new Error("Permission denied")));
 
     const { findByText } = renderWithRouter(<Scanner />, '/scan');
 
     expect(await findByText((content) => content.includes('Permission denied'))).toBeTruthy();
+
+    // Restore
+    (window as any).Html5Qrcode.prototype.start = originalStart;
   });
 });

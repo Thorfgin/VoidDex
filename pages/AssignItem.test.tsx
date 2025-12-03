@@ -66,7 +66,7 @@ describe('AssignItem Page', () => {
   test('handles successful assignment (reassign) and clears draft', async () => {
     (api.searchItemByItin as any).mockResolvedValue({ success: true, data: mockItemData });
     (api.updateItem as any).mockResolvedValue({ success: true, data: { ...mockItemData, owner: '9999#11' } });
-    
+
     const { getByPlaceholderText, getByText, findByDisplayValue, getByDisplayValue } = renderWithRouter(<AssignItem />, '/assign-item', { draftId: 'd1' });
 
     // Load item
@@ -81,7 +81,7 @@ describe('AssignItem Page', () => {
     fireEvent.click(getByText('Assign'));
 
     await waitFor(() => {
-        expect(api.updateItem).toHaveBeenCalledWith('1234', { owner: '9999#11' });
+      expect(api.updateItem).toHaveBeenCalledWith('1234', { owner: '9999#11' });
     });
     expect(offlineStorage.deleteStoredChange).toHaveBeenCalledWith('d1');
   });
@@ -95,10 +95,10 @@ describe('AssignItem Page', () => {
     // Load item
     const input = document.querySelector('input[placeholder="4-digit ID"]');
     if(input) {
-        fireEvent.change(input, { target: { value: '1234' } });
-        fireEvent.click(getByText('Find'));
+      fireEvent.change(input, { target: { value: '1234' } });
+      fireEvent.click(getByText('Find'));
     }
-    
+
     await findByDisplayValue('Test Item');
 
     // Clear owner
@@ -106,15 +106,15 @@ describe('AssignItem Page', () => {
 
     // First Click: Should trigger confirm state
     fireEvent.click(getByText('Unassign'));
-    
-    expect(getByText('Confirm Unassign')).toBeTruthy();
+
+    expect(getByText(/Confirm Unassign/)).toBeTruthy();
     expect(getByText(/Are you sure you want to remove the player/)).toBeTruthy();
 
     // Second Click: Actually executes
     fireEvent.click(getByText('Confirm Unassign'));
 
     await waitFor(() => {
-        expect(api.updateItem).toHaveBeenCalledWith('1234', { owner: '' });
+      expect(api.updateItem).toHaveBeenCalledWith('1234', { owner: '' });
     });
   });
 });

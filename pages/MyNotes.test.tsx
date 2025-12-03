@@ -1,4 +1,4 @@
-import { fireEvent } from '@testing-library/react';
+import { fireEvent, waitFor } from '@testing-library/react';
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import MyNotes from './MyNotes';
 // @ts-ignore
@@ -66,7 +66,7 @@ describe('MyNotes Page', () => {
   test('renders list of notes with pinned item at top', () => {
     (offlineStorage.getNotes as any).mockReturnValue(mockNotes);
     const { getByText } = renderWithRouter(<MyNotes />, '/my-notes');
-    
+
     expect(getByText('Gamma Note')).toBeTruthy();
   });
 
@@ -76,9 +76,9 @@ describe('MyNotes Page', () => {
 
     const titleSortBtn = getByText('Title', { selector: 'button' });
     fireEvent.click(titleSortBtn); // Becomes Title ASC
-    
+
     const visibleNotes = getAllByText(/Alpha Note|Beta Note|Gamma Note/);
-    expect(visibleNotes[0].textContent).toContain('Gamma Note'); 
+    expect(visibleNotes[0].textContent).toContain('Gamma Note'); // Pinned first
     expect(visibleNotes[1].textContent).toContain('Alpha Note');
     expect(visibleNotes[2].textContent).toContain('Beta Note');
   });
@@ -91,7 +91,7 @@ describe('MyNotes Page', () => {
     fireEvent.click(pinButtons[0]);
 
     expect(offlineStorage.saveNote).toHaveBeenCalledWith(expect.objectContaining({
-        isPinned: true
+      isPinned: true
     }));
   });
 
@@ -118,11 +118,11 @@ describe('MyNotes Page', () => {
     const { getByText } = renderWithRouter(<MyNotes />, '/my-notes');
     fireEvent.click(getByText('Alpha Note'));
     expect(mockNavigate).toHaveBeenCalledWith('/create-note', expect.objectContaining({
-        state: expect.objectContaining({ note: mockNotes[0] })
+      state: expect.objectContaining({ note: mockNotes[0] })
     }));
   });
 
-  test('handles single deletion', async () => {
+  test('handles single deletion', () => {
     (offlineStorage.getNotes as any).mockReturnValue(mockNotes);
     const { getAllByTitle, getByText } = renderWithRouter(<MyNotes />, '/my-notes');
 
@@ -130,7 +130,7 @@ describe('MyNotes Page', () => {
     fireEvent.click(deleteBtns[0]);
 
     expect(getByText('Delete Note?')).toBeTruthy();
-    
+
     fireEvent.click(getByText('Delete'));
 
     expect(offlineStorage.deleteNote).toHaveBeenCalled();
@@ -138,22 +138,27 @@ describe('MyNotes Page', () => {
 
   test('handles bulk selection and deletion', async () => {
     (offlineStorage.getNotes as any).mockReturnValue(mockNotes);
+    jest.useFakeTimers();
+
     const { getByText } = renderWithRouter(<MyNotes />, '/my-notes');
 
-    jest.useFakeTimers();
     const alphaNote = getByText('Alpha Note').closest('div')?.parentElement;
     if(!alphaNote) throw new Error("Card not found");
-    
+
     const touchTarget = alphaNote.querySelector('div.flex-1');
     if(!touchTarget) throw new Error("Touch target not found");
 
     fireEvent.mouseDown(touchTarget);
-    
+
+    // Simulate long press
     jest.advanceTimersByTime(600);
-    
+
     fireEvent.mouseUp(touchTarget);
 
-    expect(getByText('1 Selected')).toBeTruthy();
+    // Wait for the UI to update to selection mode
+    await waitFor(() => {
+      expect(getByText('1 Selected')).toBeTruthy();
+    });
 
     const bulkTrash = document.querySelector('button[title="Delete Selected"]');
     if (bulkTrash) fireEvent.click(bulkTrash);

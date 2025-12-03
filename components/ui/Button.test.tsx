@@ -11,25 +11,25 @@ describe('Button Component', () => {
   test('handles onClick event', () => {
     const handleClick = jest.fn();
     const { getByText } = render(<Button onClick={handleClick}>Click Me</Button>);
-    
+
     fireEvent.click(getByText('Click Me'));
     expect(handleClick).toHaveBeenCalledTimes(1);
   });
 
-  test('shows loading state', () => {
+  test('shows loading state and disables button', () => {
     const { getByText } = render(<Button isLoading>Click Me</Button>);
     expect(getByText('Processing...')).toBeTruthy();
     const btn = getByText('Processing...').closest('button') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
 
-  test('applies variant classes', () => {
+  test('applies variant classes correctly', () => {
     const { getByText } = render(
-      <>
-        <Button variant="primary">Primary</Button>
-        <Button variant="secondary">Secondary</Button>
-        <Button variant="danger">Danger</Button>
-      </>
+        <>
+          <Button variant="primary">Primary</Button>
+          <Button variant="secondary">Secondary</Button>
+          <Button variant="danger">Danger</Button>
+        </>
     );
 
     expect(getByText('Primary').className).toContain('bg-brand-primary');
@@ -37,13 +37,19 @@ describe('Button Component', () => {
     expect(getByText('Danger').className).toContain('hover:text-red-700');
   });
 
+  test('forwards type attribute (e.g., submit)', () => {
+    const { getByRole } = render(<Button type="submit">Submit</Button>);
+    const btn = getByRole('button') as HTMLButtonElement;
+    expect(btn.type).toBe('submit');
+  });
+
   test('is disabled when disabled prop is set', () => {
     const handleClick = jest.fn();
     const { getByText } = render(<Button disabled onClick={handleClick}>Disabled</Button>);
-    
+
     const btn = getByText('Disabled') as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    
+
     fireEvent.click(btn);
     expect(handleClick).not.toHaveBeenCalled();
   });

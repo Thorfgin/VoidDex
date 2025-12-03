@@ -27,15 +27,15 @@ describe('AuthCallback Page', () => {
 
   const renderComponent = (searchString = '') => {
     return render(
-      <AuthContext.Provider value={{ user: null, token: null, login: mockLogin, logout: jest.fn() }}>
-        <MemoryRouter initialEntries={[`/auth/callback${searchString}`]}>
-          <Routes>
-            <Route path="/auth/callback" element={<AuthCallback />} />
-            <Route path="/login" element={<div>Login Page</div>} />
-            <Route path="/" element={<div>Dashboard</div>} />
-          </Routes>
-        </MemoryRouter>
-      </AuthContext.Provider>
+        <AuthContext.Provider value={{ user: null, token: null, login: mockLogin, logout: jest.fn() }}>
+          <MemoryRouter initialEntries={[`/auth/callback${searchString}`]}>
+            <Routes>
+              <Route path="/auth/callback" element={<AuthCallback />} />
+              <Route path="/login" element={<div>Login Page</div>} />
+              <Route path="/" element={<div>Dashboard</div>} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
     );
   };
 
@@ -44,7 +44,7 @@ describe('AuthCallback Page', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/login');
   });
 
-  test('exchanges code for token and logs in successfully', async () => {
+  test('exchanges code for token and logs in successfully, calling API only once', async () => {
     const mockUser = { id: '1', name: 'Test User' };
     const mockToken = 'abc-123';
     (authService.exchangeCodeForToken as any).mockResolvedValue({ user: mockUser, token: mockToken });
@@ -54,9 +54,12 @@ describe('AuthCallback Page', () => {
     expect(getByText('Authenticating...')).toBeTruthy();
 
     await waitFor(() => {
-        expect(authService.exchangeCodeForToken).toHaveBeenCalledWith('valid_code');
-        expect(mockLogin).toHaveBeenCalledWith(mockUser, mockToken);
-        expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
+      expect(authService.exchangeCodeForToken).toHaveBeenCalledWith('valid_code');
+      // Ensure strict mode double invocation protection works (should be called exactly once)
+      expect(authService.exchangeCodeForToken).toHaveBeenCalledTimes(1);
+
+      expect(mockLogin).toHaveBeenCalledWith(mockUser, mockToken);
+      expect(mockNavigate).toHaveBeenCalledWith('/', { replace: true });
     });
   });
 
@@ -67,7 +70,7 @@ describe('AuthCallback Page', () => {
     renderComponent('?code=bad_code');
 
     await waitFor(() => {
-        expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
+      expect(mockNavigate).toHaveBeenCalledWith('/login', { replace: true });
     });
   });
 });

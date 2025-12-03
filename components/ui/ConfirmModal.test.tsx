@@ -5,20 +5,20 @@ import ConfirmModal from './ConfirmModal';
 describe('ConfirmModal Component', () => {
   test('does not render when isOpen is false', () => {
     const { queryByText } = render(
-      <ConfirmModal isOpen={false} onClose={() => {}} onConfirm={() => {}} />
+        <ConfirmModal isOpen={false} onClose={() => {}} onConfirm={() => {}} />
     );
     expect(queryByText('Discard Changes?')).toBeNull();
   });
 
   test('renders correctly when isOpen is true', () => {
     const { getByText } = render(
-      <ConfirmModal 
-        isOpen={true} 
-        onClose={() => {}} 
-        onConfirm={() => {}} 
-        title="Test Title" 
-        message="Test Message"
-      />
+        <ConfirmModal
+            isOpen={true}
+            onClose={() => {}}
+            onConfirm={() => {}}
+            title="Test Title"
+            message="Test Message"
+        />
     );
     expect(getByText('Test Title')).toBeTruthy();
     expect(getByText('Test Message')).toBeTruthy();
@@ -27,9 +27,9 @@ describe('ConfirmModal Component', () => {
   test('calls onClose when Cancel is clicked', () => {
     const handleClose = jest.fn();
     const { getByText } = render(
-      <ConfirmModal isOpen={true} onClose={handleClose} onConfirm={() => {}} />
+        <ConfirmModal isOpen={true} onClose={handleClose} onConfirm={() => {}} />
     );
-    
+
     fireEvent.click(getByText('Cancel'));
     expect(handleClose).toHaveBeenCalled();
   });
@@ -37,10 +37,20 @@ describe('ConfirmModal Component', () => {
   test('calls onConfirm when Confirm button is clicked', () => {
     const handleConfirm = jest.fn();
     const { getByText } = render(
-      <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={handleConfirm} confirmLabel="Yes, Do it" />
+        <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={handleConfirm} confirmLabel="Yes, Do it" />
     );
-    
+
     fireEvent.click(getByText('Yes, Do it'));
     expect(handleConfirm).toHaveBeenCalled();
+  });
+
+  test('renders correct button variant style for confirm button', () => {
+    const { getByText } = render(
+        <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={() => {}} confirmLabel="Danger Action" confirmVariant="danger" />
+    );
+
+    const dangerBtn = getByText('Danger Action');
+    // Danger variant usually has these classes (based on Button.tsx implementation)
+    expect(dangerBtn.className).toContain('text-red');
   });
 });

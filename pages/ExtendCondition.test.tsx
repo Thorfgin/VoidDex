@@ -29,9 +29,9 @@ const mockCondition = {
   name: 'Space Flu',
   description: 'Coughing',
   assignments: [
-      { plin: '1234#12', expiryDate: '01/01/2025' },
-      { plin: '5555#55', expiryDate: '01/01/2025' },
-      { plin: '9999#99', expiryDate: '01/01/2025' }
+    { plin: '1234#12', expiryDate: '01/01/2025' },
+    { plin: '5555#55', expiryDate: '01/01/2025' },
+    { plin: '9999#99', expiryDate: '01/01/2025' }
   ],
   remarks: '',
   csRemarks: ''
@@ -80,6 +80,32 @@ describe('ExtendCondition Page', () => {
     expect(getByText('3 Selected')).toBeTruthy();
   });
 
+  test('validates invalid date before update', async () => {
+    (api.searchConditionByCoin as any).mockResolvedValue({ success: true, data: mockCondition });
+
+    const { getByPlaceholderText, getByText, findByDisplayValue, findByText } = renderWithRouter(<ExtendCondition />, '/extend-condition');
+
+    // Load
+    fireEvent.change(getByPlaceholderText('4-digit ID'), { target: { value: '8888' } });
+    fireEvent.click(getByText('Find'));
+    await findByDisplayValue('Space Flu');
+
+    // Select All
+    const filterInput = getByPlaceholderText('Filter by PLIN or Name...');
+    fireEvent.focus(filterInput);
+    fireEvent.click(getByText('Select All'));
+
+    // Change Date to Invalid
+    const dateInput = getByPlaceholderText("dd/mm/yyyy (Empty = 'until death')");
+    fireEvent.change(dateInput, { target: { value: '99/99/2022' } });
+
+    // Update
+    fireEvent.click(getByText('Update'));
+
+    expect(await findByText(/Invalid date format/i)).toBeTruthy();
+    expect(api.updateCondition).not.toHaveBeenCalled();
+  });
+
   test('mass updates expiry date', async () => {
     (api.searchConditionByCoin as any).mockResolvedValue({ success: true, data: mockCondition });
     (api.updateCondition as any).mockResolvedValue({ success: true, data: mockCondition });
@@ -104,12 +130,12 @@ describe('ExtendCondition Page', () => {
     fireEvent.click(getByText('Update'));
 
     await waitFor(() => {
-        expect(api.updateCondition).toHaveBeenCalledWith('8888', expect.objectContaining({
-            assignments: expect.arrayContaining([
-                expect.objectContaining({ plin: '1234#12', expiryDate: '31/12/2030' }),
-                expect.objectContaining({ plin: '5555#55', expiryDate: '31/12/2030' })
-            ])
-        }));
+      expect(api.updateCondition).toHaveBeenCalledWith('8888', expect.objectContaining({
+        assignments: expect.arrayContaining([
+          expect.objectContaining({ plin: '1234#12', expiryDate: '31/12/2030' }),
+          expect.objectContaining({ plin: '5555#55', expiryDate: '31/12/2030' })
+        ])
+      }));
     });
   });
 });

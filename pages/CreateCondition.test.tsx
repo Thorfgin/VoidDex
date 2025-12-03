@@ -30,7 +30,7 @@ describe('CreateCondition Page', () => {
 
   test('validates required fields', async () => {
     const { getByText, findByText } = renderWithRouter(<CreateCondition />, '/create-condition');
-    
+
     fireEvent.click(getByText('Create Condition'));
 
     expect(await findByText('Name is required.')).toBeTruthy();
@@ -38,9 +38,9 @@ describe('CreateCondition Page', () => {
   });
 
   test('successfully creates a condition', async () => {
-    (api.createCondition as any).mockResolvedValue({ 
-        success: true, 
-        data: { coin: '8888', name: 'New Plague' } 
+    (api.createCondition as any).mockResolvedValue({
+      success: true,
+      data: { coin: '8888', name: 'New Plague' }
     });
 
     const { getByPlaceholderText, getByText, findByText } = renderWithRouter(<CreateCondition />, '/create-condition');
@@ -51,19 +51,19 @@ describe('CreateCondition Page', () => {
     fireEvent.click(getByText('Create Condition'));
 
     await waitFor(() => {
-        expect(api.createCondition).toHaveBeenCalledWith(expect.objectContaining({
-            name: 'New Plague',
-            description: 'Coughing'
-        }));
+      expect(api.createCondition).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'New Plague',
+        description: 'Coughing'
+      }));
     });
     expect(await findByText('Condition Created! COIN: 8888')).toBeTruthy();
   });
 
   test('saves draft condition', async () => {
-    const { getByPlaceholderText, getByText } = renderWithRouter(<CreateCondition />, '/create-condition');
+    const { getByPlaceholderText, getByText, findByText } = renderWithRouter(<CreateCondition />, '/create-condition');
 
     fireEvent.change(getByPlaceholderText('Condition Name'), { target: { value: 'Draft Cond' } });
-    
+
     const draftBtn = getByText('Save Draft');
     fireEvent.click(draftBtn);
 
@@ -71,14 +71,15 @@ describe('CreateCondition Page', () => {
       type: 'condition',
       title: 'Draft Cond'
     }));
+    expect(await findByText('Draft saved successfully.')).toBeTruthy();
   });
 
   test('populates from draft', () => {
     const draftData = {
-        name: 'Loaded Condition',
-        description: 'Loaded Desc',
-        owner: '1111#11',
-        expiryDate: '01/01/2026'
+      name: 'Loaded Condition',
+      description: 'Loaded Desc',
+      owner: '1111#11',
+      expiryDate: '01/01/2026'
     };
     const { getByDisplayValue } = renderWithRouter(<CreateCondition />, '/create-condition', { initialData: draftData });
 

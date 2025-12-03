@@ -12,13 +12,13 @@ describe('Navbar Component', () => {
 
   const renderNavbar = (user = mockUser, theme: any = 'light', appTheme: any = 'modern') => {
     return render(
-      <ThemeContext.Provider value={{ theme, setTheme: mockSetTheme, appTheme, setAppTheme: mockSetAppTheme }}>
-        <AuthContext.Provider value={{ user, token: 'abc', login: jest.fn(), logout: mockLogout }}>
-          <MemoryRouter>
-            <Navbar />
-          </MemoryRouter>
-        </AuthContext.Provider>
-      </ThemeContext.Provider>
+        <ThemeContext.Provider value={{ theme, setTheme: mockSetTheme, appTheme, setAppTheme: mockSetAppTheme }}>
+          <AuthContext.Provider value={{ user, token: 'abc', login: jest.fn(), logout: mockLogout }}>
+            <MemoryRouter>
+              <Navbar />
+            </MemoryRouter>
+          </AuthContext.Provider>
+        </ThemeContext.Provider>
     );
   };
 
@@ -48,7 +48,7 @@ describe('Navbar Component', () => {
 
   test('opens theme preset menu and selects theme', () => {
     const { getByTitle, getByText } = renderNavbar();
-    
+
     const paletteBtn = getByTitle('Change App Style');
     fireEvent.click(paletteBtn);
 
@@ -56,7 +56,20 @@ describe('Navbar Component', () => {
     expect(getByText('Historic')).toBeTruthy();
 
     fireEvent.click(getByText('Historic'));
-    
+
     expect(mockSetAppTheme).toHaveBeenCalledWith('historic');
+  });
+
+  test('closes theme menu when clicking outside', () => {
+    const { getByTitle, queryByText } = renderNavbar();
+
+    const paletteBtn = getByTitle('Change App Style');
+    fireEvent.click(paletteBtn);
+    expect(queryByText('Futura')).toBeTruthy();
+
+    // Click outside
+    fireEvent.mouseDown(document.body);
+
+    expect(queryByText('Futura')).toBeNull();
   });
 });

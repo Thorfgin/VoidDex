@@ -59,14 +59,14 @@ describe('CreateItem Page', () => {
 
   test('renders View Mode with action buttons and navigates', () => {
     const itemData = { itin: '9999', name: 'View Item', owner: '1111#11', expiryDate: '01/01/2030' };
-    const { getByText, getByTitle, getByLabelText } = renderWithRouter(<CreateItem />, '/create-item', { 
-        mode: 'view', 
-        item: itemData 
+    const { getByText, getByTitle, getByLabelText } = renderWithRouter(<CreateItem />, '/create-item', {
+      mode: 'view',
+      item: itemData
     });
 
     expect(getByText('Item Properties')).toBeTruthy();
     expect((getByLabelText('ITIN') as HTMLInputElement).value).toBe('9999');
-    
+
     const rechargeBtn = getByTitle('Recharge');
     const assignBtn = getByTitle('Assign');
     expect(rechargeBtn).toBeTruthy();
@@ -74,13 +74,27 @@ describe('CreateItem Page', () => {
 
     fireEvent.click(rechargeBtn);
     expect(mockNavigate).toHaveBeenCalledWith('/recharge-item', expect.objectContaining({
-        state: expect.objectContaining({ item: expect.objectContaining({ itin: '9999' }) })
+      state: expect.objectContaining({ item: expect.objectContaining({ itin: '9999' }) })
     }));
+  });
+
+  test('handles Back button logic with returnTo state', () => {
+    const { getByTitle } = renderWithRouter(<CreateItem />, '/create-item', {
+      returnTo: '/some-page',
+      returnState: { someData: true }
+    });
+
+    const backBtn = getByTitle('Back');
+    expect(backBtn).toBeTruthy();
+
+    fireEvent.click(backBtn);
+
+    expect(mockNavigate).toHaveBeenCalledWith('/some-page', { state: { someData: true } });
   });
 
   test('validates required fields on submit', async () => {
     const { getByText, findByText } = renderWithRouter(<CreateItem />, '/create-item');
-    
+
     const submitBtn = getByText('Create Item');
     fireEvent.click(submitBtn);
 
@@ -89,9 +103,9 @@ describe('CreateItem Page', () => {
   });
 
   test('handles successful item creation and clears draft', async () => {
-    (api.createItem as any).mockResolvedValue({ 
-      success: true, 
-      data: { itin: '9999' } 
+    (api.createItem as any).mockResolvedValue({
+      success: true,
+      data: { itin: '9999' }
     });
 
     const { getByText, getByLabelText, findByText } = renderWithRouter(<CreateItem />, '/create-item', { draftId: 'draft-123' });
@@ -105,7 +119,7 @@ describe('CreateItem Page', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-        expect(api.createItem).toHaveBeenCalled();
+      expect(api.createItem).toHaveBeenCalled();
     });
     expect(await findByText(/Item Created! ITIN: 9999/i)).toBeTruthy();
     expect(offlineStorage.deleteStoredChange).toHaveBeenCalledWith('draft-123');
@@ -115,7 +129,7 @@ describe('CreateItem Page', () => {
     const { getByText, getByLabelText, findByText } = renderWithRouter(<CreateItem />, '/create-item');
 
     fireEvent.change(getByLabelText(/Name/i), { target: { value: 'Draft Item' } });
-    
+
     const draftBtn = getByText('Save Draft');
     fireEvent.click(draftBtn);
 
@@ -130,10 +144,10 @@ describe('CreateItem Page', () => {
 
   test('resets form when New Item is clicked', () => {
     const { getByTitle, getByLabelText } = renderWithRouter(<CreateItem />, '/create-item');
-    
+
     fireEvent.change(getByLabelText(/Name/i), { target: { value: 'Dirty Input' } });
     fireEvent.click(getByTitle('New Item'));
-    
+
     expect(getByTitle('New Item')).toBeTruthy();
   });
 });

@@ -29,8 +29,8 @@ const mockPower = {
   name: 'Flight',
   description: 'Fly',
   assignments: [
-      { plin: '1234#12', expiryDate: '01/01/2030' },
-      { plin: '9999#99', expiryDate: '01/01/2030' }
+    { plin: '1234#12', expiryDate: '01/01/2030' },
+    { plin: '9999#99', expiryDate: '01/01/2030' }
   ],
   remarks: '',
   csRemarks: ''
@@ -60,15 +60,15 @@ describe('AssignPower Page', () => {
     expect(await findByText('Player is already assigned.')).toBeTruthy();
 
     fireEvent.change(getByPlaceholderText('1234#12'), { target: { value: '8888#88' } });
-    
+
     fireEvent.click(assignBtn);
 
     await waitFor(() => {
-        expect(api.updatePower).toHaveBeenCalledWith('6001', expect.objectContaining({
-            assignments: expect.arrayContaining([
-                expect.objectContaining({ plin: '8888#88' })
-            ])
-        }));
+      expect(api.updatePower).toHaveBeenCalledWith('6001', expect.objectContaining({
+        assignments: expect.arrayContaining([
+          expect.objectContaining({ plin: '8888#88' })
+        ])
+      }));
     });
   });
 
@@ -88,20 +88,20 @@ describe('AssignPower Page', () => {
     fireEvent.click(getByText('Select All'));
 
     const removeBtn = getByText(/Remove Selected/);
-    
+
     fireEvent.click(removeBtn);
 
     await waitFor(() => {
-        expect(api.updatePower).toHaveBeenCalledWith('6001', { assignments: [] });
+      expect(api.updatePower).toHaveBeenCalledWith('6001', { assignments: [] });
     });
   });
 
   test('restores draft state correctly', () => {
     const draftData = {
-        power: mockPower,
-        newOwner: '7777#77',
-        newExpiry: '01/01/2099',
-        selectedRemovePlins: ['1234#12']
+      power: mockPower,
+      newOwner: '7777#77',
+      newExpiry: '01/01/2099',
+      selectedRemovePlins: ['1234#12']
     };
 
     const { getByDisplayValue, getByText } = renderWithRouter(<AssignPower />, '/assign-power', { initialData: draftData });
