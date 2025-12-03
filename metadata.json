@@ -1,0 +1,7 @@
+{
+  "name": "VoidDex",
+  "description": "A management system for creating, recharging, and assigning inventory items using ITIN verification.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

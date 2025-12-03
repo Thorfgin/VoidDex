@@ -1,0 +1,16 @@
+{
+  "name": "VoidDex Inventory",
+  "short_name": "VoidDex",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#8B0000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><path d=%22M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z%22 fill=%22%238B0000%22/><path d=%22M7 8 L10.5 17 L14 6 L16.5 16 M12 13 H15.5%22 stroke=%22white%22 stroke-width=%221%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22 fill=%22none%22/></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
