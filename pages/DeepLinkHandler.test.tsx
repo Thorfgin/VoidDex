@@ -1,42 +1,43 @@
+
 import { render, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
-import * as ReactRouterDom from 'react-router-dom';
-import { describe, expect, test, jest } from '@jest/globals';
+import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import DeepLinkHandler from './DeepLinkHandler';
 // @ts-ignore
 import * as api from '../services/api';
 
+// ---- Typed API mock ----
 jest.mock('../services/api', () => ({
     searchItemByItin: jest.fn(),
     searchConditionByCoin: jest.fn(),
     searchPowerByPoin: jest.fn(),
 }));
 
+const apiMock = api as jest.Mocked<typeof api>;
+
+// ---- React Router mocks with mutable params ----
 const mockNavigate = jest.fn();
-jest.mock('react-router-dom', () => ({
-    ...jest.requireActual('react-router-dom') as any,
-    useNavigate: () => mockNavigate,
-    useParams: () => ({ id: '1234' }),
-}));
+
+// mutable params object we can tweak per test
+let mockParams: { id?: string } = { id: '1234' };
+
+jest.mock('react-router-dom', () => {
+    const actual = jest.requireActual('react-router-dom') as any;
+    return {
+        ...actual,
+        useNavigate: () => mockNavigate,
+        useParams: () => mockParams,
+    };
+});
 
 describe('DeepLinkHandler', () => {
-    test('redirects to dashboard if id is missing', async () => {
-        jest.spyOn(ReactRouterDom, 'useParams').mockReturnValue({});
-
-        render(
-            <MemoryRouter>
-                <DeepLinkHandler type="item" />
-            </MemoryRouter>
-        );
-
-        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'));
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockParams = { id: '1234' }; // default for tests that don't override
     });
 
-    test('navigates to item page if found', async () => {
-        jest.spyOn(ReactRouterDom, 'useParams').mockReturnValue({ id: '9999' });
-        const mockItem = { itin: '9999', name: 'Deep Item' };
-        (api.searchItemByItin as any).mockResolvedValue({ success: true, data: mockItem });
+    test('redirects to dashboard if id is missing', async () => {
+        mockParams = {}; // simulate no :id param
 
         render(
             <MemoryRouter>
@@ -45,16 +46,49 @@ describe('DeepLinkHandler', () => {
         );
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/create-item', expect.objectContaining({
-                state: expect.objectContaining({ item: mockItem, mode: 'view' })
-            }));
+            expect(mockNavigate).toHaveBeenCalledWith('/');
         });
     });
 
-    test('navigates to condition page if found', async () => {
-        jest.spyOn(ReactRouterDom, 'useParams').mockReturnValue({ id: '8000' });
-        const mockCond = { coin: '8000', name: 'Deep Cond' };
-        (api.searchConditionByCoin as any).mockResolvedValue({ success: true, data: mockCond });
+    test('navigates to item page if item is found', async () => {
+        mockParams = { id: '9999' };
+        const mockItem = { itin: '9999', name: 'Deep Item' };
+
+        apiMock.searchItemByItin.mockResolvedValue({
+            success: true,
+            data: mockItem,
+        } as any);
+
+        render(
+            <MemoryRouter>
+                <DeepLinkHandler type="item" />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(apiMock.searchItemByItin).toHaveBeenCalledWith('9999');
+            expect(mockNavigate).toHaveBeenCalledWith(
+                '/create-item',
+                expect.objectContaining({
+                    replace: true,
+                    state: expect.objectContaining({
+                        item: mockItem,
+                        mode: 'view',
+                        returnQuery: '',
+                    }),
+                })
+            );
+        });
+    });
+
+    test('navigates to condition page if condition is found', async () => {
+        mockParams = { id: '8000' };
+        const mockCondition = { coin: '8000', name: 'Deep Cond' };
+
+        apiMock.searchConditionByCoin.mockResolvedValue({
+            success: true,
+            data: mockCondition,
+        } as any);
 
         render(
             <MemoryRouter>
@@ -63,15 +97,59 @@ describe('DeepLinkHandler', () => {
         );
 
         await waitFor(() => {
-            expect(mockNavigate).toHaveBeenCalledWith('/create-condition', expect.objectContaining({
-                state: expect.objectContaining({ item: mockCond, mode: 'view' })
-            }));
+            expect(apiMock.searchConditionByCoin).toHaveBeenCalledWith('8000');
+            expect(mockNavigate).toHaveBeenCalledWith(
+                '/create-condition',
+                expect.objectContaining({
+                    replace: true,
+                    state: expect.objectContaining({
+                        item: mockCondition,
+                        mode: 'view',
+                        returnQuery: '',
+                    }),
+                })
+            );
         });
     });
 
-    test('navigates to dashboard search if not found', async () => {
-        jest.spyOn(ReactRouterDom, 'useParams').mockReturnValue({ id: '0000' });
-        (api.searchItemByItin as any).mockResolvedValue({ success: false });
+    test('navigates to power page if power is found', async () => {
+        mockParams = { id: '6000' };
+        const mockPower = { poin: '6000', name: 'Deep Power' };
+
+        apiMock.searchPowerByPoin.mockResolvedValue({
+            success: true,
+            data: mockPower,
+        } as any);
+
+        render(
+            <MemoryRouter>
+                <DeepLinkHandler type="power" />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(apiMock.searchPowerByPoin).toHaveBeenCalledWith('6000');
+            expect(mockNavigate).toHaveBeenCalledWith(
+                '/create-power',
+                expect.objectContaining({
+                    replace: true,
+                    state: expect.objectContaining({
+                        item: mockPower,
+                        mode: 'view',
+                        returnQuery: '',
+                    }),
+                })
+            );
+        });
+    });
+
+    test('navigates to dashboard search if entity not found', async () => {
+        mockParams = { id: '0000' };
+
+        apiMock.searchItemByItin.mockResolvedValue({
+            success: false,
+            data: null,
+        } as any);
 
         render(
             <MemoryRouter>
@@ -80,7 +158,24 @@ describe('DeepLinkHandler', () => {
         );
 
         await waitFor(() => {
+            expect(apiMock.searchItemByItin).toHaveBeenCalledWith('0000');
             expect(mockNavigate).toHaveBeenCalledWith('/?q=0000', { replace: true });
+        });
+    });
+
+    test('navigates to dashboard on error', async () => {
+        mockParams = { id: '1234' };
+
+        apiMock.searchItemByItin.mockRejectedValue(new Error('Boom'));
+
+        render(
+            <MemoryRouter>
+                <DeepLinkHandler type="item" />
+            </MemoryRouter>
+        );
+
+        await waitFor(() => {
+            expect(mockNavigate).toHaveBeenCalledWith('/');
         });
     });
 });

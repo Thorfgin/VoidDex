@@ -1,5 +1,5 @@
-import { fireEvent, waitFor } from '@testing-library/react';
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+import { fireEvent, waitFor, screen } from '@testing-library/react';
+import { describe, test, jest, beforeEach } from '@jest/globals';
 import CreateCondition from './CreateCondition';
 // @ts-ignore
 import * as api from '../services/api';
@@ -23,67 +23,271 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
+const apiMock = api as jest.Mocked<typeof api>;
+const offlineMock = offlineStorage as jest.Mocked<typeof offlineStorage>;
+
 describe('CreateCondition Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  test('validates required fields', async () => {
-    const { getByText, findByText } = renderWithRouter(<CreateCondition />, '/create-condition');
+  test('validates required fields: name and description', async () => {
+    const { getByPlaceholderText, findByText, container } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+    );
 
-    fireEvent.click(getByText('Create Condition'));
+    const form = container.querySelector('form');
+    if (!form) throw new Error('Form element not found');
+
+    // 1) All empty → Name required first
+    fireEvent.submit(form);
 
     expect(await findByText('Name is required.')).toBeTruthy();
-    expect(api.createCondition).not.toHaveBeenCalled();
+    expect(apiMock.createCondition).not.toHaveBeenCalled();
+
+    // 2) Fill name only → Description required
+    fireEvent.change(getByPlaceholderText('Condition Name'), {
+      target: { value: 'Some Name' },
+    });
+
+    fireEvent.submit(form);
+
+    expect(await findByText('Description is required.')).toBeTruthy();
+    expect(apiMock.createCondition).not.toHaveBeenCalled();
   });
 
-  test('successfully creates a condition', async () => {
-    (api.createCondition as any).mockResolvedValue({
+  test('validates owner PLIN format and expiry date format', async () => {
+    const { getByPlaceholderText, findByText, container } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+    );
+
+    const form = container.querySelector('form');
+    if (!form) throw new Error('Form element not found');
+
+    // Fill minimal valid name & description
+    const nameInput = getByPlaceholderText('Condition Name');
+    const descInput = getByPlaceholderText('Description');
+    fireEvent.change(nameInput, { target: { value: 'Invalid Test' } });
+    fireEvent.change(descInput, { target: { value: 'Check validation' } });
+
+    // Invalid PLIN: numeric but missing # / second part
+    const ownerInput = screen.getByPlaceholderText('1234#12');
+    fireEvent.change(ownerInput, { target: { value: '1234' } });
+
+    fireEvent.submit(form);
+
+    expect(
+        await findByText('Player must be format 1234#12'),
+    ).toBeTruthy();
+    expect(apiMock.createCondition).not.toHaveBeenCalled();
+
+    // Fix PLIN, break expiry format
+    fireEvent.change(ownerInput, { target: { value: '1234#1' } });
+
+    const expiryInput = screen.getByPlaceholderText(
+        "dd/mm/yyyy (Empty = 'until death')",
+    );
+    fireEvent.change(expiryInput, { target: { value: '010120' } }); // becomes 01/01/20 internally, but still fails regex
+
+    fireEvent.submit(form);
+
+    expect(
+        await findByText('Expiry Date must be DD/MM/YYYY or Empty'),
+    ).toBeTruthy();
+    expect(apiMock.createCondition).not.toHaveBeenCalled();
+  });
+
+  test('successfully creates a condition without owner (no assignments)', async () => {
+    apiMock.createCondition.mockResolvedValue({
       success: true,
-      data: { coin: '8888', name: 'New Plague' }
+      data: {
+        coin: '8888',
+        name: 'New Plague',
+        description: 'Coughing',
+        assignments: [],
+      },
     });
 
-    const { getByPlaceholderText, getByText, findByText } = renderWithRouter(<CreateCondition />, '/create-condition');
+    const { getByPlaceholderText, findByText, container } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+    );
 
-    fireEvent.change(getByPlaceholderText('Condition Name'), { target: { value: 'New Plague' } });
-    fireEvent.change(getByPlaceholderText('Description'), { target: { value: 'Coughing' } });
+    const form = container.querySelector('form');
+    if (!form) throw new Error('Form element not found');
 
-    fireEvent.click(getByText('Create Condition'));
+    fireEvent.change(getByPlaceholderText('Condition Name'), {
+      target: { value: 'New Plague' },
+    });
+    fireEvent.change(getByPlaceholderText('Description'), {
+      target: { value: 'Coughing' },
+    });
+
+    fireEvent.submit(form);
 
     await waitFor(() => {
-      expect(api.createCondition).toHaveBeenCalledWith(expect.objectContaining({
-        name: 'New Plague',
-        description: 'Coughing'
-      }));
+      expect(apiMock.createCondition).toHaveBeenCalledTimes(1);
+      expect(apiMock.createCondition).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'New Plague',
+            description: 'Coughing',
+            assignments: [],
+            remarks: '',
+            csRemarks: '',
+          }),
+      );
     });
-    expect(await findByText('Condition Created! COIN: 8888')).toBeTruthy();
+
+    expect(
+        await findByText('Condition Created! COIN: 8888'),
+    ).toBeTruthy();
+
+    // After success, form goes into view mode (read-only) and buttons disappear
+    expect(screen.queryByText('Save Draft')).toBeNull();
+    expect(
+        screen.queryByText((content, element) =>
+            element?.tagName.toLowerCase() === 'button' &&
+            content === 'Create Condition',
+        ),
+    ).toBeNull();
+  });
+
+  test('creates condition with owner and empty expiry using "until death"', async () => {
+    apiMock.createCondition.mockResolvedValue({
+      success: true,
+      data: {
+        coin: '7777',
+        name: 'Forever Plague',
+        description: 'Eternal',
+        assignments: [],
+      },
+    });
+
+    const { getByPlaceholderText, container } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+    );
+
+    const form = container.querySelector('form');
+    if (!form) throw new Error('Form element not found');
+
+    fireEvent.change(getByPlaceholderText('Condition Name'), {
+      target: { value: 'Forever Plague' },
+    });
+    fireEvent.change(getByPlaceholderText('Description'), {
+      target: { value: 'Eternal' },
+    });
+
+    const ownerInput = screen.getByPlaceholderText('1234#12');
+    fireEvent.change(ownerInput, { target: { value: '1111#11' } });
+
+    const expiryInput = screen.getByPlaceholderText(
+        "dd/mm/yyyy (Empty = 'until death')",
+    );
+    fireEvent.change(expiryInput, { target: { value: '' } });
+
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(apiMock.createCondition).toHaveBeenCalledTimes(1);
+      expect(apiMock.createCondition).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: 'Forever Plague',
+            description: 'Eternal',
+            assignments: [
+              {
+                plin: '1111#11',
+                expiryDate: 'until death',
+              },
+            ],
+          }),
+      );
+    });
+
+    expect(
+        screen.getByText('Condition Created! COIN: 7777'),
+    ).toBeTruthy();
+  });
+
+  test('handles API failure and shows error message', async () => {
+    apiMock.createCondition.mockResolvedValue({
+      success: false,
+      error: 'Bad things',
+    } as any);
+
+    const { getByPlaceholderText, findByText, container } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+    );
+
+    const form = container.querySelector('form');
+    if (!form) throw new Error('Form element not found');
+
+    fireEvent.change(getByPlaceholderText('Condition Name'), {
+      target: { value: 'Failing Cond' },
+    });
+    fireEvent.change(getByPlaceholderText('Description'), {
+      target: { value: 'Should fail' },
+    });
+
+    fireEvent.submit(form);
+
+    expect(
+        await findByText('Failed: Bad things'),
+    ).toBeTruthy();
   });
 
   test('saves draft condition', async () => {
-    const { getByPlaceholderText, getByText, findByText } = renderWithRouter(<CreateCondition />, '/create-condition');
+    const { getByPlaceholderText, getByText, findByText } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+    );
 
-    fireEvent.change(getByPlaceholderText('Condition Name'), { target: { value: 'Draft Cond' } });
+    fireEvent.change(getByPlaceholderText('Condition Name'), {
+      target: { value: 'Draft Cond' },
+    });
 
     const draftBtn = getByText('Save Draft');
     fireEvent.click(draftBtn);
 
-    expect(offlineStorage.saveStoredChange).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'condition',
-      title: 'Draft Cond'
-    }));
-    expect(await findByText('Draft saved successfully.')).toBeTruthy();
+    expect(offlineMock.saveStoredChange).toHaveBeenCalledTimes(1);
+    expect(offlineMock.saveStoredChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'condition',
+          action: 'create',
+          title: 'Draft Cond',
+          data: expect.objectContaining({
+            name: 'Draft Cond',
+          }),
+        }),
+    );
+
+    expect(
+        await findByText('Draft saved successfully.'),
+    ).toBeTruthy();
   });
 
-  test('populates from draft', () => {
+  test('populates form from draft data on load', () => {
     const draftData = {
       name: 'Loaded Condition',
       description: 'Loaded Desc',
       owner: '1111#11',
-      expiryDate: '01/01/2026'
+      expiryDate: '01/01/2026',
+      remarks: 'Some remarks',
+      csRemarks: 'CS remarks',
     };
-    const { getByDisplayValue } = renderWithRouter(<CreateCondition />, '/create-condition', { initialData: draftData });
+
+    const { getByDisplayValue } = renderWithRouter(
+        <CreateCondition />,
+        '/create-condition',
+        { initialData: draftData },
+    );
 
     expect(getByDisplayValue('Loaded Condition')).toBeTruthy();
+    expect(getByDisplayValue('Loaded Desc')).toBeTruthy();
     expect(getByDisplayValue('1111#11')).toBeTruthy();
+    expect(getByDisplayValue('01/01/2026')).toBeTruthy();
   });
 });

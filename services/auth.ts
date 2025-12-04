@@ -23,7 +23,7 @@ export const authService = {
    */
   exchangeCodeForToken: async (code: string): Promise<AuthResponse> => {
     // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    await new Promise(resolve => setTimeout(resolve, 500));
 
     if (!code.startsWith('mock_secure_auth_code')) {
       throw new Error('Invalid authorization code');

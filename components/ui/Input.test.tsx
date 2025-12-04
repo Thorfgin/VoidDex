@@ -4,56 +4,147 @@ import Input from './Input';
 
 describe('Input Component', () => {
   test('renders standard input', () => {
-    const { getByLabelText, getByRole } = render(<Input label="Test Label" name="test" />);
-    expect(getByLabelText(/Test Label/i)).toBeTruthy();
-    expect(getByRole('textbox').getAttribute('type')).toBe('text');
+    const { getByText, getByRole } = render(
+        <Input label="Test Label" name="test" placeholder="Type…" />
+    );
+
+    expect(getByText('Test Label:')).toBeTruthy();
+
+    const textbox = getByRole('textbox') as HTMLInputElement;
+    expect(textbox.tagName).toBe('INPUT');
+    expect(textbox.type).toBe('text');
+    expect(textbox.name).toBe('test');
+    expect(textbox.placeholder).toBe('Type…');
   });
 
-  test('renders error message and applies error styles', () => {
-    const { getByText, getByRole } = render(<Input label="Test" error="Required field" />);
+  test('applies read-only styles for single-line input', () => {
+    const { getByRole } = render(
+        <Input label="ReadOnly" value="Value" readOnly />
+    );
+
+    const input = getByRole('textbox') as HTMLInputElement;
+    // readOnly branch: gray background and text
+    expect(input.className).toContain('bg-gray-100');
+    expect(input.className).toContain('text-gray-600');
+  });
+
+  test('renders error message and applies error styles to the field', () => {
+    const { getByText, getByRole } = render(
+        <Input label="Test" error="Required field" />
+    );
+
     expect(getByText('Required field')).toBeTruthy();
-    const inputContainer = getByRole('textbox').parentElement;
-    expect(inputContainer?.className).toContain('border-red-500');
+
+    const input = getByRole('textbox') as HTMLInputElement;
+    expect(input.className).toContain('border-red-500');
+    expect(input.className).toContain('bg-red-50');
   });
 
-  test('handles multiline expansion interaction', () => {
-    const { getByRole, getByTitle } = render(<Input label="Description" multiline value="Line 1" readOnly={false} />);
+  test('applies error styles for multiline textarea as well', () => {
+    const { getByText, getByRole } = render(
+        <Input label="Multiline" multiline expandable={false} error="Bad" />
+    );
 
-    // Initially collapsed
-    const collapsed = getByRole('button', { name: /tap to expand/i });
+    expect(getByText('Bad')).toBeTruthy();
+
+    const textarea = getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.tagName).toBe('TEXTAREA');
+    expect(textarea.className).toContain('border-red-500');
+    expect(textarea.className).toContain('bg-red-50');
+  });
+
+  test('handles multiline expansion interaction (editable)', () => {
+    const { getByTitle, getByRole } = render(
+        <Input
+            label="Description"
+            multiline
+            value="Line 1"
+            readOnly={false}
+        />
+    );
+
+    // Initially collapsed: clickable container with title "Tap to expand"
+    const collapsed = getByTitle('Tap to expand');
     expect(collapsed).toBeTruthy();
 
     // Click to expand
     fireEvent.click(collapsed);
 
     const textarea = getByRole('textbox') as HTMLTextAreaElement;
+    expect(textarea.tagName).toBe('TEXTAREA');
     expect(textarea.value).toBe('Line 1');
 
-    // Click collapse button
+    // Click collapse control
     const collapseBtn = getByTitle('Tap to collapse');
     fireEvent.click(collapseBtn);
 
-    // Should be collapsed again
-    expect(getByRole('button', { name: /tap to expand/i })).toBeTruthy();
+    // Should show collapsed view again
+    expect(getByTitle('Tap to expand')).toBeTruthy();
+  });
+
+  test('collapsed multiline view shows placeholder when empty', () => {
+    const { getByTitle } = render(
+        <Input
+            label="Desc"
+            multiline
+            placeholder="Write something…"
+            value=""
+            readOnly={false}
+        />
+    );
+
+    const collapsed = getByTitle('Tap to expand');
+    expect(collapsed.textContent).toContain('Write something…');
+  });
+
+  test('collapsed multiline view converts newlines to comma-separated preview', () => {
+    const { getByTitle } = render(
+        <Input
+            label="Preview"
+            multiline
+            value={'Line 1\nLine 2\nLine 3'}
+            readOnly={false}
+        />
+    );
+
+    const collapsed = getByTitle('Tap to expand');
+    // In collapsed state, newlines are replaced with ", "
+    expect(collapsed.textContent).toContain('Line 1, Line 2, Line 3');
   });
 
   test('renders simple textarea when expandable is false', () => {
-    const { getByRole, queryByRole } = render(<Input label="Simple" multiline expandable={false} />);
-    const textarea = getByRole('textbox');
+    const { getByRole, queryByTitle } = render(
+        <Input label="Simple" multiline expandable={false} />
+    );
+
+    const textarea = getByRole('textbox') as HTMLTextAreaElement;
     expect(textarea.tagName).toBe('TEXTAREA');
-    // Should NOT have the expand button wrapper which is a div with role button
-    expect(queryByRole('button', { name: /tap to expand/i })).toBeNull();
+
+    // No expand/collapse UI
+    expect(queryByTitle('Tap to expand')).toBeNull();
   });
 
-  test('handles read-only multiline expansion', () => {
-    const { getByRole, getByTitle, queryByRole } = render(<Input label="Notes" multiline value="Note 1" readOnly />);
+  test('handles read-only multiline expansion (no editable textarea)', () => {
+    const { getByTitle, queryByRole } = render(
+        <Input label="Notes" multiline value="Note 1" readOnly />
+    );
 
-    const collapsed = getByRole('button', { name: /tap to expand/i });
+    const collapsed = getByTitle('Tap to expand');
     fireEvent.click(collapsed);
 
     const expanded = getByTitle('Tap to collapse');
     expect(expanded.textContent).toContain('Note 1');
-    // Should not render an editable textarea
+
+    // No editable textarea should be present
     expect(queryByRole('textbox')).toBeNull();
+  });
+
+  test('forwards disabled prop to underlying input', () => {
+    const { getByRole } = render(
+        <Input label="Disabled" disabled />
+    );
+
+    const input = getByRole('textbox') as HTMLInputElement;
+    expect(input.disabled).toBe(true);
   });
 });

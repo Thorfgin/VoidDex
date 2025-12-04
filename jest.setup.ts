@@ -1,6 +1,16 @@
 import { jest } from '@jest/globals';
 import '@testing-library/jest-dom';
 import { TextEncoder, TextDecoder } from 'util';
+import { configure } from '@testing-library/react';
+
+// Configure RTL to not dump the whole DOM on errors
+configure({
+    getElementError: (message, container) => {
+        const error = new Error(message ? message : 'Unknown error occurred @'+container.tagName);
+        error.name = 'TestingLibraryElementError';
+        return error;
+    },
+});
 
 // Mock IntersectionObserver if used by any libraries
 (globalThis as any).IntersectionObserver = class IntersectionObserver {

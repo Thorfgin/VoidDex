@@ -122,7 +122,7 @@ let MOCK_CONDITIONS: Condition[] = JSON.parse(JSON.stringify(INITIAL_CONDITIONS)
 let MOCK_POWERS: Power[] = JSON.parse(JSON.stringify(INITIAL_POWERS));
 
 // Simulates network latency (800ms) to allow UI loading states to be visualized
-const simulateDelay = () => new Promise(resolve => setTimeout(resolve, 800));
+const simulateDelay = () => new Promise(resolve => setTimeout(resolve, 400));
 
 const checkAuth = () => {
   // In a real app, this would check if the Axios/Fetch headers contain a valid token.

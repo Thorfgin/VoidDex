@@ -9,7 +9,7 @@ import Logo from '../components/Logo';
  * Login Page
  *
  * Entry point for unauthenticated users.
- * Initiates the OAuth flow by redirecting to the provider's URL.
+ * It initiates the OAuth flow by redirecting to the provider's URL.
  */
 const Login: React.FC = () => {
   const navigate = useNavigate();

@@ -1,17 +1,36 @@
-import { render, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, test, jest } from '@jest/globals';
 import ConfirmModal from './ConfirmModal';
 
 describe('ConfirmModal Component', () => {
   test('does not render when isOpen is false', () => {
-    const { queryByText } = render(
+    render(
         <ConfirmModal isOpen={false} onClose={() => {}} onConfirm={() => {}} />
     );
-    expect(queryByText('Discard Changes?')).toBeNull();
+
+    // Default title should not exist when closed
+    const defaultTitle = screen.queryByText('Discard Changes?');
+    expect(defaultTitle).toBeNull();
   });
 
-  test('renders correctly when isOpen is true', () => {
-    const { getByText } = render(
+  test('renders default title, message and confirm label when open with no overrides', () => {
+    render(
+        <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={() => {}} />
+    );
+
+    expect(screen.getByText('Discard Changes?')).toBeTruthy();
+    expect(
+        screen.getByText(
+            'You have unsaved changes. Are you sure you want to discard them?'
+        )
+    ).toBeTruthy();
+
+    const confirmBtn = screen.getByRole('button', { name: 'Discard' });
+    expect(confirmBtn).toBeTruthy();
+  });
+
+  test('renders custom title and message when provided', () => {
+    render(
         <ConfirmModal
             isOpen={true}
             onClose={() => {}}
@@ -20,37 +39,77 @@ describe('ConfirmModal Component', () => {
             message="Test Message"
         />
     );
-    expect(getByText('Test Title')).toBeTruthy();
-    expect(getByText('Test Message')).toBeTruthy();
+
+    expect(screen.getByText('Test Title')).toBeTruthy();
+    expect(screen.getByText('Test Message')).toBeTruthy();
   });
 
   test('calls onClose when Cancel is clicked', () => {
     const handleClose = jest.fn();
-    const { getByText } = render(
-        <ConfirmModal isOpen={true} onClose={handleClose} onConfirm={() => {}} />
+    render(
+        <ConfirmModal
+            isOpen={true}
+            onClose={handleClose}
+            onConfirm={() => {}}
+        />
     );
 
-    fireEvent.click(getByText('Cancel'));
-    expect(handleClose).toHaveBeenCalled();
+    const cancelBtn = screen.getByRole('button', { name: 'Cancel' });
+    fireEvent.click(cancelBtn);
+
+    expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  test('calls onConfirm when Confirm button is clicked', () => {
+  test('calls onConfirm when confirm button is clicked', () => {
     const handleConfirm = jest.fn();
-    const { getByText } = render(
-        <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={handleConfirm} confirmLabel="Yes, Do it" />
+    render(
+        <ConfirmModal
+            isOpen={true}
+            onClose={() => {}}
+            onConfirm={handleConfirm}
+            confirmLabel="Yes, Do it"
+        />
     );
 
-    fireEvent.click(getByText('Yes, Do it'));
-    expect(handleConfirm).toHaveBeenCalled();
+    const confirmBtn = screen.getByRole('button', { name: 'Yes, Do it' });
+    fireEvent.click(confirmBtn);
+
+    expect(handleConfirm).toHaveBeenCalledTimes(1);
   });
 
-  test('renders correct button variant style for confirm button', () => {
-    const { getByText } = render(
-        <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={() => {}} confirmLabel="Danger Action" confirmVariant="danger" />
+  test('applies danger variant styles to confirm button when confirmVariant="danger"', () => {
+    render(
+        <ConfirmModal
+            isOpen={true}
+            onClose={() => {}}
+            onConfirm={() => {}}
+            confirmLabel="Danger Action"
+            confirmVariant="danger"
+        />
     );
 
-    const dangerBtn = getByText('Danger Action');
-    // Danger variant usually has these classes (based on Button.tsx implementation)
-    expect(dangerBtn.className).toContain('text-red');
+    const dangerBtn = screen.getByRole('button', { name: 'Danger Action' });
+
+    // Danger variant in Button.tsx contains these classes:
+    // "hover:bg-red-50 hover:border-red-300 hover:text-red-700 ..."
+    expect(dangerBtn.className).toContain('hover:bg-red-50');
+    expect(dangerBtn.className).toContain('hover:text-red-700');
+  });
+
+  test('applies primary variant styles when confirmVariant="primary"', () => {
+    render(
+        <ConfirmModal
+            isOpen={true}
+            onClose={() => {}}
+            onConfirm={() => {}}
+            confirmLabel="Primary Action"
+            confirmVariant="primary"
+        />
+    );
+
+    const primaryBtn = screen.getByRole('button', { name: 'Primary Action' });
+
+    // Primary variant in Button.tsx contains "bg-brand-primary"
+    expect(primaryBtn.className).toContain('bg-brand-primary');
   });
 });
