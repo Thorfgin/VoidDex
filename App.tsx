@@ -228,7 +228,7 @@ const App: React.FC = () => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const applyTheme = () => {
-      let isDark = false;
+      let isDark;
       if (theme === 'dark') {
         isDark = true;
       } else if (theme === 'light') {
