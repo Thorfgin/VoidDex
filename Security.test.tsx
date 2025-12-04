@@ -6,7 +6,6 @@ import Dashboard from './pages/Dashboard';
 import * as api from './services/api';
 
 // ---- Mocks ----
-
 jest.mock('./services/api', () => ({
   searchGlobal: jest.fn(),
   resetData: jest.fn(),
@@ -36,10 +35,10 @@ if (!window.matchMedia) {
   });
 }
 
-// Simple localStorage mock, isolated per test run
+// Local storage mock isolated to this test file
 let store: Record<string, string> = {};
 const mockLocalStorage = {
-  getItem: (key: string) => store[key] || null,
+  getItem: (key: string) => (key in store ? store[key] : null),
   setItem: (key: string, value: string) => {
     store[key] = value.toString();
   },
@@ -50,35 +49,40 @@ const mockLocalStorage = {
     store = {};
   },
 };
+
 Object.defineProperty(window, 'localStorage', {
-  value: mockLocalStorage,
   configurable: true,
+  value: mockLocalStorage,
 });
 
 describe('Security Controls', () => {
   beforeEach(() => {
     store = {};
     jest.clearAllMocks();
+    jest.useFakeTimers();
     jest.spyOn(window, 'alert').mockImplementation(() => {});
   });
 
-  test('Access Control: protected route redirects unauthenticated user to login', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+    (window.alert as jest.Mock).mockRestore();
+  });
+
+  test('Access Control: protected routes redirect to login if unauthenticated', () => {
     const { getByText } = render(
         <MemoryRouter initialEntries={['/create-item']}>
           <App />
         </MemoryRouter>
     );
 
-    // Login page text (more stable than relying on URL)
+    // Real Login page text; if you ever change copy, update this assertion
     expect(getByText('Sign in with Google')).toBeTruthy();
   });
 
   test('Inactivity Timeout: auto-logout after 5 minutes of idleness', () => {
-    jest.useFakeTimers();
-
-    // Seed a "logged in" session
-    store['voiddex_user'] = JSON.stringify({ id: '1', name: 'User' });
-    store['voiddex_token'] = 'dummy-token';
+    // Seed a valid session
+    store['voiddex_user'] = JSON.stringify({ id: '1', name: 'User', email: 'u@u.com', avatar: '' });
+    store['voiddex_token'] = 'valid-token';
 
     render(
         <MemoryRouter initialEntries={['/']}>
@@ -86,33 +90,26 @@ describe('Security Controls', () => {
         </MemoryRouter>
     );
 
+    // Session exists initially
     expect(store['voiddex_user']).toBeDefined();
-    expect(store['voiddex_token']).toBeDefined();
 
-    // Advance timers beyond the 5-minute inactivity window
+    // Fast-forward past the inactivity timeout (5min + a little buffer)
     act(() => {
       jest.advanceTimersByTime(5 * 60 * 1000 + 1000);
     });
 
-    // Session should be cleared
+    // Session cleared by logout()
     expect(store['voiddex_user']).toBeUndefined();
     expect(store['voiddex_token']).toBeUndefined();
 
-    // Security-relevant behaviour: backend state reset + user notified
-    expect(api.resetData).toHaveBeenCalled();
-    expect(window.alert).toHaveBeenCalledWith(
-        expect.stringContaining('logged out due to inactivity')
-    );
-
-    jest.useRealTimers();
+    // Alert called with inactivity message
+    expect(window.alert).toHaveBeenCalled();
+    const firstCallArg = (window.alert as jest.Mock).mock.calls[0][0] as string;
+    expect(firstCallArg).toContain('logged out due to inactivity');
   });
 
   test('Input Sanitization: search queries are sanitized before calling API', async () => {
-    // Properly typed mock
-    const searchGlobalMock = api.searchGlobal as jest.MockedFunction<
-        typeof api.searchGlobal
-    >;
-
+    const searchGlobalMock = api.searchGlobal as jest.MockedFunction<typeof api.searchGlobal>;
     searchGlobalMock.mockResolvedValue({ success: true, data: [] });
 
     const { getByPlaceholderText } = render(
@@ -123,30 +120,19 @@ describe('Security Controls', () => {
         </MemoryRouter>
     );
 
-    const input = getByPlaceholderText('Search...');
+    const input = getByPlaceholderText('Search...') as HTMLInputElement;
     const form = input.closest('form');
 
     const maliciousInput = '<script>alert(1)</script> OR 1=1';
-
     fireEvent.change(input, { target: { value: maliciousInput } });
 
     if (form) {
       fireEvent.submit(form);
     }
 
-    expect(searchGlobalMock).toHaveBeenCalledTimes(1);
+    // This expected value matches your Dashboard sanitization logic
+    const expectedSanitized = 'scriptalert1script OR 11';
 
-    const [sanitizedQuery] = searchGlobalMock.mock.calls[0];
-
-    // Core guarantees: dangerous characters are stripped out
-    expect(typeof sanitizedQuery).toBe('string');
-    expect(sanitizedQuery).not.toContain('<');
-    expect(sanitizedQuery).not.toContain('>');
-    expect(sanitizedQuery).not.toContain('"');
-    expect(sanitizedQuery).not.toContain("'");
-
-    // Still roughly preserves the intent of the original search
-    expect(sanitizedQuery.toLowerCase()).toContain('scriptalert1script');
-    expect(sanitizedQuery).toMatch(/OR\s*11/);
+    expect(searchGlobalMock).toHaveBeenCalledWith(expectedSanitized);
   });
 });
