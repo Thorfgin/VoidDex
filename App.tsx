@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import {Navigate, Route, Routes} from 'react-router-dom';
+import PrivateRoute from './routes/PrivateRoute';
 import { User } from './types';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
@@ -12,14 +13,14 @@ import AssignCondition from './pages/AssignCondition';
 import CreatePower from './pages/CreatePower';
 import ExtendPower from './pages/ExtendPower';
 import AssignPower from './pages/AssignPower';
-import Login from './pages/Login';
-import AuthCallback from './pages/AuthCallback';
 import DeepLinkHandler from './pages/DeepLinkHandler';
 import Scanner from './pages/Scanner';
 import StoredChanges from './pages/StoredChanges';
 import MyNotes from './pages/MyNotes';
 import CreateNote from './pages/CreateNote';
 import { resetData } from './services/api';
+import Login from "./pages/Login.tsx";
+import AuthCallback from './pages/AuthCallback.tsx';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type AppThemeId = 'futura' | 'modern' | 'historic';
@@ -340,25 +341,32 @@ const App: React.FC = () => {
           <Navbar />
           <main className="flex-grow container mx-auto px-4 py-2">
             <Routes>
-              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
+              {/* Public */}
+              <Route path="/login" element={!user ? <Login /> : <Navigate to="/" replace />} />
               <Route path="/auth/callback" element={<AuthCallback />} />
-              <Route path="/" element={user ? <Dashboard /> : <Navigate to="/login" />} />
-              <Route path="/scan" element={user ? <Scanner /> : <Navigate to="/login" />} />
-              <Route path="/stored-changes" element={user ? <StoredChanges /> : <Navigate to="/login" />} />
-              <Route path="/my-notes" element={user ? <MyNotes /> : <Navigate to="/login" />} />
-              <Route path="/create-note" element={user ? <CreateNote /> : <Navigate to="/login" />} />
-              <Route path="/create-item" element={user ? <CreateItem /> : <Navigate to="/login" />} />
-              <Route path="/recharge-item" element={user ? <RechargeItem /> : <Navigate to="/login" />} />
-              <Route path="/assign-item" element={user ? <AssignItem /> : <Navigate to="/login" />} />
-              <Route path="/create-condition" element={user ? <CreateCondition /> : <Navigate to="/login" />} />
-              <Route path="/extend-condition" element={user ? <ExtendCondition /> : <Navigate to="/login" />} />
-              <Route path="/assign-condition" element={user ? <AssignCondition /> : <Navigate to="/login" />} />
-              <Route path="/create-power" element={user ? <CreatePower /> : <Navigate to="/login" />} />
-              <Route path="/extend-power" element={user ? <ExtendPower /> : <Navigate to="/login" />} />
-              <Route path="/assign-power" element={user ? <AssignPower /> : <Navigate to="/login" />} />
-              <Route path="/items/:id" element={user ? <DeepLinkHandler type="item" /> : <Navigate to="/login" />} />
-              <Route path="/conditions/:id" element={user ? <DeepLinkHandler type="condition" /> : <Navigate to="/login" />} />
-              <Route path="/powers/:id" element={user ? <DeepLinkHandler type="power" /> : <Navigate to="/login" />} />
+
+              {/* Protected */}
+              <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/scan" element={<PrivateRoute><Scanner /></PrivateRoute>} />
+              <Route path="/stored-changes" element={<PrivateRoute><StoredChanges /></PrivateRoute>} />
+              <Route path="/my-notes" element={<PrivateRoute><MyNotes /></PrivateRoute>} />
+              <Route path="/create-note" element={<PrivateRoute><CreateNote /></PrivateRoute>} />
+
+              <Route path="/create-item" element={<PrivateRoute><CreateItem /></PrivateRoute>} />
+              <Route path="/recharge-item" element={<PrivateRoute><RechargeItem /></PrivateRoute>} />
+              <Route path="/assign-item" element={<PrivateRoute><AssignItem /></PrivateRoute>} />
+
+              <Route path="/create-condition" element={<PrivateRoute><CreateCondition /></PrivateRoute>} />
+              <Route path="/extend-condition" element={<PrivateRoute><ExtendCondition /></PrivateRoute>} />
+              <Route path="/assign-condition" element={<PrivateRoute><AssignCondition /></PrivateRoute>} />
+
+              <Route path="/create-power" element={<PrivateRoute><CreatePower /></PrivateRoute>} />
+              <Route path="/extend-power" element={<PrivateRoute><ExtendPower /></PrivateRoute>} />
+              <Route path="/assign-power" element={<PrivateRoute><AssignPower /></PrivateRoute>} />
+
+              <Route path="/items/:id" element={<PrivateRoute><DeepLinkHandler type="item" /></PrivateRoute>} />
+              <Route path="/conditions/:id" element={<PrivateRoute><DeepLinkHandler type="condition" /></PrivateRoute>} />
+              <Route path="/powers/:id" element={<PrivateRoute><DeepLinkHandler type="power" /></PrivateRoute>} />
             </Routes>
           </main>
         </div>
