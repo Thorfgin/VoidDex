@@ -1,17 +1,32 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, {useState, useEffect, useRef} from 'react';
+import {useNavigate, useLocation} from 'react-router-dom';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import ConfirmModal from '../components/ui/ConfirmModal';
-import { searchConditionByCoin, updateCondition, getCharacterName } from '../services/api';
-import { saveStoredChange, deleteStoredChange } from '../services/offlineStorage';
-import { Condition, Assignment } from '../types';
-import { Search, Home, ArrowLeft, UserMinus, UserPlus, ChevronDown, CheckSquare, Square, X, FileText } from 'lucide-react';
+import UserPlusMinus from '../components/icons/UserPlusMinus';
+import {searchConditionByCoin, updateCondition, getCharacterName} from '../services/api';
+import {saveStoredChange, deleteStoredChange} from '../services/offlineStorage';
+import {Condition, Assignment} from '../types';
+import {
+  Search,
+  Home,
+  ArrowLeft,
+  UserMinus,
+  UserPlus,
+  ChevronDown,
+  CheckSquare,
+  Square,
+  X,
+  FileText
+} from 'lucide-react';
+
+import Page from '../components/layout/Page';
+import Panel from '../components/layout/Panel';
 
 const AssignCondition: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   const [coinSearch, setCoinSearch] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
@@ -20,7 +35,7 @@ const AssignCondition: React.FC = () => {
 
   const [condition, setCondition] = useState<Condition | null>(null);
   const [currentAssignments, setCurrentAssignments] = useState<Assignment[]>([]);
-  
+
   // Inputs for Adding
   const [newOwner, setNewOwner] = useState('');
   const [newExpiry, setNewExpiry] = useState('');
@@ -31,7 +46,7 @@ const AssignCondition: React.FC = () => {
   const [removeFilter, setRemoveFilter] = useState('');
   const removeDropdownRef = useRef<HTMLDivElement>(null);
   const removeInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
@@ -39,7 +54,7 @@ const AssignCondition: React.FC = () => {
   const [confirmTitle, setConfirmTitle] = useState("Discard Changes?");
   const [confirmMessage, setConfirmMessage] = useState("You have unsaved changes. Are you sure you want to discard them?");
   const [confirmLabel, setConfirmLabel] = useState("Discard");
-  const [confirmVariant, setConfirmVariant] = useState<'primary'|'danger'>("danger");
+  const [confirmVariant, setConfirmVariant] = useState<'primary' | 'danger'>("danger");
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [draftId, setDraftId] = useState<string | null>(() => location.state?.draftId || null);
   const [draftTimestamp, setDraftTimestamp] = useState<number | null>(() => location.state?.draftTimestamp || null);
@@ -49,18 +64,18 @@ const AssignCondition: React.FC = () => {
   const [baselineJson, setBaselineJson] = useState('');
 
   const getCurrentStateString = () => JSON.stringify({
-      newOwner,
-      newExpiry,
-      selectedRemovePlins: Array.from(selectedRemovePlins).sort()
+    newOwner,
+    newExpiry,
+    selectedRemovePlins: Array.from(selectedRemovePlins).sort()
   });
 
   const isUnsaved = condition !== null && getCurrentStateString() !== baselineJson && !statusMessage?.text.includes("Assigned");
 
   const getDefaultExpiry = () => {
     const date = new Date();
-    date.setDate(1); 
-    date.setMonth(date.getMonth() + 1); 
-    date.setFullYear(date.getFullYear() + 1); 
+    date.setDate(1);
+    date.setMonth(date.getMonth() + 1);
+    date.setFullYear(date.getFullYear() + 1);
     const d = String(date.getDate()).padStart(2, '0');
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const y = date.getFullYear();
@@ -73,14 +88,13 @@ const AssignCondition: React.FC = () => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isUnsaved) {
         e.preventDefault();
-        e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isUnsaved]);
 
-  // Click outside to close dropdown
+  // Click outside to close the dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (removeDropdownRef.current && !removeDropdownRef.current.contains(event.target as Node)) {
@@ -107,48 +121,52 @@ const AssignCondition: React.FC = () => {
   // --- INITIALIZATION ---
   useEffect(() => {
     if (location.state) {
-        if (location.state.initialData) {
-             // Load Draft
-             const { condition: savedCondition, newOwner: savedNewOwner, newExpiry: savedNewExpiry, selectedRemovePlins: savedRemovePlins } = location.state.initialData;
-             setCondition(savedCondition);
-             setCoinSearch(savedCondition.coin);
-             setCurrentAssignments(savedCondition.assignments || []);
-             setNewOwner(savedNewOwner);
-             setNewExpiry(savedNewExpiry);
-             
-             // Safe default for potentially undefined array from old drafts
-             const safeRemovePlins = savedRemovePlins || [];
-             setSelectedRemovePlins(new Set(safeRemovePlins));
-             
-             // Set baseline from draft
-             setBaselineJson(JSON.stringify({
-                 newOwner: savedNewOwner,
-                 newExpiry: savedNewExpiry,
-                 selectedRemovePlins: safeRemovePlins.sort()
-             }));
-             if (location.state.draftId) setDraftId(location.state.draftId);
-             if (location.state.draftTimestamp) setDraftTimestamp(location.state.draftTimestamp);
-        } else if (location.state.item) {
-             // Load from View
-             const passedItem = location.state.item as Condition;
-             if (passedItem && passedItem.coin) {
-                setCondition(passedItem);
-                setCoinSearch(passedItem.coin);
-                setCurrentAssignments(passedItem.assignments || []);
-                const defExp = getDefaultExpiry();
-                setNewExpiry(defExp);
-                // Baseline for new item load
-                setBaselineJson(JSON.stringify({
-                    newOwner: '',
-                    newExpiry: defExp,
-                    selectedRemovePlins: []
-                }));
-             }
-        } else {
-             setNewExpiry(getDefaultExpiry());
+      if (location.state.initialData) {
+        // Load Draft
+        const {
+          condition: savedCondition,
+          newOwner: savedNewOwner,
+          newExpiry: savedNewExpiry,
+          selectedRemovePlins: savedRemovePlins
+        } = location.state.initialData;
+        setCondition(savedCondition);
+        setCoinSearch(savedCondition.coin);
+        setCurrentAssignments(savedCondition.assignments || []);
+        setNewOwner(savedNewOwner);
+        setNewExpiry(savedNewExpiry);
+
+        // Safe default for the potentially undefined array from old drafts
+        const safeRemovePlins = savedRemovePlins || [];
+        setSelectedRemovePlins(new Set(safeRemovePlins));
+
+        // Set baseline from draft
+        setBaselineJson(JSON.stringify({
+          newOwner: savedNewOwner,
+          newExpiry: savedNewExpiry,
+          selectedRemovePlins: safeRemovePlins.sort()
+        }));
+        if (location.state.draftId) setDraftId(location.state.draftId);
+        if (location.state.draftTimestamp) setDraftTimestamp(location.state.draftTimestamp);
+      } else if (location.state.item) {
+        // Load from View
+        const passedItem = location.state.item as Condition;
+        if (passedItem && passedItem.coin) {
+          setCondition(passedItem);
+          setCoinSearch(passedItem.coin);
+          setCurrentAssignments(passedItem.assignments || []);
+          const defExp = getDefaultExpiry();
+          setNewExpiry(defExp);
+          setBaselineJson(JSON.stringify({
+            newOwner: '',
+            newExpiry: defExp,
+            selectedRemovePlins: []
+          }));
         }
-    } else {
+      } else {
         setNewExpiry(getDefaultExpiry());
+      }
+    } else {
+      setNewExpiry(getDefaultExpiry());
     }
   }, [location.state]);
 
@@ -165,7 +183,7 @@ const AssignCondition: React.FC = () => {
     setStatusMessage(null);
     setDraftId(null);
     setDraftTimestamp(null);
-    navigate(location.pathname, { replace: true, state: {} });
+    navigate(location.pathname, {replace: true, state: {}});
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -180,7 +198,7 @@ const AssignCondition: React.FC = () => {
     setBaselineJson('');
     setDraftId(null);
     setDraftTimestamp(null);
-    
+
     setIsSearching(true);
     try {
       const result = await searchConditionByCoin(coinSearch);
@@ -190,9 +208,9 @@ const AssignCondition: React.FC = () => {
         setCurrentAssignments(cond.assignments || []);
         // Set baseline
         setBaselineJson(JSON.stringify({
-            newOwner: '',
-            newExpiry: getDefaultExpiry(),
-            selectedRemovePlins: []
+          newOwner: '',
+          newExpiry: getDefaultExpiry(),
+          selectedRemovePlins: []
         }));
       } else {
         setSearchError('Not found');
@@ -212,7 +230,7 @@ const AssignCondition: React.FC = () => {
       id: id,
       type: 'condition',
       action: 'assign',
-      data: { condition, newOwner, newExpiry, selectedRemovePlins: Array.from(selectedRemovePlins) },
+      data: {condition, newOwner, newExpiry, selectedRemovePlins: Array.from(selectedRemovePlins)},
       timestamp: now,
       title: condition.name || 'Unknown Condition',
       subtitle: `Assign COIN: ${condition.coin}`
@@ -220,20 +238,20 @@ const AssignCondition: React.FC = () => {
     setDraftId(id);
     setDraftTimestamp(now);
     setBaselineJson(getCurrentStateString()); // Update baseline
-    setStatusMessage({ type: 'success', text: 'Draft saved successfully.' });
+    setStatusMessage({type: 'success', text: 'Draft saved successfully.'});
     setTimeout(() => {
-        setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
+      setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
     }, 3000);
   };
 
   const formatPLIN = (val: string) => {
     const clean = val.replace(/[^0-9#]/g, '');
     if (clean.includes('#')) {
-        const parts = clean.split('#');
-        return `${parts[0].slice(0, 4)}#${parts.slice(1).join('').slice(0, 2)}`;
+      const parts = clean.split('#');
+      return `${parts[0].slice(0, 4)}#${parts.slice(1).join('').slice(0, 2)}`;
     }
     if (clean.length > 4) {
-        return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
+      return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
     }
     return clean;
   };
@@ -270,47 +288,47 @@ const AssignCondition: React.FC = () => {
   };
 
   const handleExpiryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-     const val = e.target.value;
-     if (newExpiry && val.length < newExpiry.length) {
-         setNewExpiry(val);
-     } else {
-         setNewExpiry(formatDate(val));
-     }
+    const val = e.target.value;
+    if (newExpiry && val.length < newExpiry.length) {
+      setNewExpiry(val);
+    } else {
+      setNewExpiry(formatDate(val));
+    }
   };
 
   const toggleRemovePlinSelect = (plin: string) => {
-      const newSet = new Set(selectedRemovePlins);
-      if (newSet.has(plin)) {
-          newSet.delete(plin);
-      } else {
-          newSet.add(plin);
-      }
-      setSelectedRemovePlins(newSet);
-      setStatusMessage(null);
+    const newSet = new Set(selectedRemovePlins);
+    if (newSet.has(plin)) {
+      newSet.delete(plin);
+    } else {
+      newSet.add(plin);
+    }
+    setSelectedRemovePlins(newSet);
+    setStatusMessage(null);
   };
 
   // Filter assignments based on input
   const filteredRemoveAssignments = currentAssignments.filter(a => {
-      const search = removeFilter.toLowerCase();
-      const name = getCharacterName(a.plin) || '';
-      return a.plin.toLowerCase().includes(search) || name.toLowerCase().includes(search);
+    const search = removeFilter.toLowerCase();
+    const name = getCharacterName(a.plin) || '';
+    return a.plin.toLowerCase().includes(search) || name.toLowerCase().includes(search);
   });
 
   const toggleSelectFilteredRemove = () => {
-      const newSet = new Set(selectedRemovePlins);
-      // Check if all *visible* are selected
-      const allFilteredSelected = filteredRemoveAssignments.length > 0 && filteredRemoveAssignments.every(a => newSet.has(a.plin));
+    const newSet = new Set(selectedRemovePlins);
+    // Check if all *visible* elements are selected
+    const allFilteredSelected = filteredRemoveAssignments.length > 0 && filteredRemoveAssignments.every(a => newSet.has(a.plin));
 
-      if (allFilteredSelected) {
-          // Deselect only the filtered ones
-          filteredRemoveAssignments.forEach(a => newSet.delete(a.plin));
-      } else {
-          // Select all filtered ones
-          filteredRemoveAssignments.forEach(a => newSet.add(a.plin));
-      }
-      setSelectedRemovePlins(newSet);
+    if (allFilteredSelected) {
+      // Deselect only the filtered ones
+      filteredRemoveAssignments.forEach(a => newSet.delete(a.plin));
+    } else {
+      // Select all filtered ones
+      filteredRemoveAssignments.forEach(a => newSet.add(a.plin));
+    }
+    setSelectedRemovePlins(newSet);
   };
-  
+
   const isAllFilteredRemoveSelected = filteredRemoveAssignments.length > 0 && filteredRemoveAssignments.every(a => selectedRemovePlins.has(a.plin));
 
   const executeAddPlayer = async () => {
@@ -318,31 +336,31 @@ const AssignCondition: React.FC = () => {
     setStatusMessage(null);
 
     try {
-      const updatedAssignments = [...currentAssignments, { plin: newOwner, expiryDate: newExpiry }];
-      const result = await updateCondition(condition!.coin, { assignments: updatedAssignments });
-      
+      const updatedAssignments = [...currentAssignments, {plin: newOwner, expiryDate: newExpiry}];
+      const result = await updateCondition(condition!.coin, {assignments: updatedAssignments});
+
       if (result.success) {
         if (draftId) {
-            deleteStoredChange(draftId);
-            setDraftId(null);
-            setDraftTimestamp(null);
+          deleteStoredChange(draftId);
+          setDraftId(null);
+          setDraftTimestamp(null);
         }
-        setStatusMessage({ type: 'success', text: `Assigned ${newOwner}` });
-        setCondition({ ...condition!, assignments: updatedAssignments }); 
+        setStatusMessage({type: 'success', text: `Assigned ${newOwner}`});
+        setCondition({...condition!, assignments: updatedAssignments});
         setCurrentAssignments(updatedAssignments);
         setNewOwner('');
         setNewExpiry(getDefaultExpiry());
         // Reset baseline for next action
         setBaselineJson(JSON.stringify({
-            newOwner: '',
-            newExpiry: getDefaultExpiry(),
-            selectedRemovePlins: []
+          newOwner: '',
+          newExpiry: getDefaultExpiry(),
+          selectedRemovePlins: []
         }));
       } else {
-        setStatusMessage({ type: 'error', text: 'Failed to assign.' });
+        setStatusMessage({type: 'error', text: 'Failed to assign.'});
       }
     } catch (err) {
-      setStatusMessage({ type: 'error', text: 'Error' });
+      setStatusMessage({type: 'error', text: 'Error'});
     } finally {
       setIsUpdating(false);
     }
@@ -351,38 +369,38 @@ const AssignCondition: React.FC = () => {
   const handleAddPlayer = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!condition) return;
-    
+
     if (newOwner.trim().length === 0) {
-        setStatusMessage({ type: 'error', text: 'Please enter a Player PLIN.' });
-        return;
+      setStatusMessage({type: 'error', text: 'Please enter a Player PLIN.'});
+      return;
     }
 
-    if (!/^\d{1,4}#\d{1,2}$/.test(newOwner) && newOwner !== 'SYSTEM') {
-        setStatusMessage({ type: 'error', text: 'PLIN format: 1234#12' });
-        return;
+    if (!/^\d{1,4}#\d{1,2}$/.test(newOwner) && newOwner.toUpperCase() !== 'SYSTEM') {
+      setStatusMessage({type: 'error', text: 'PLIN format: 1234#12'});
+      return;
     }
 
     if (currentAssignments.some(a => a.plin === newOwner)) {
-        setStatusMessage({ type: 'error', text: 'Player is already assigned.' });
-        return;
+      setStatusMessage({type: 'error', text: 'Player is already assigned.'});
+      return;
     }
 
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(newExpiry) && newExpiry !== 'until death') {
-        setStatusMessage({ type: 'error', text: 'Invalid Expiry Date format.' });
-        return;
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(newExpiry) && newExpiry.toLowerCase() !== 'until death') {
+      setStatusMessage({type: 'error', text: 'Invalid Expiry Date format.'});
+      return;
     }
 
     if (draftId) {
-        setConfirmTitle("Process Draft?");
-        setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-        setConfirmLabel("Process");
-        setConfirmVariant("primary");
-        setPendingAction(() => executeAddPlayer);
-        setShowConfirm(true);
-        return;
+      setConfirmTitle("Process Draft?");
+      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
+      setConfirmLabel("Process");
+      setConfirmVariant("primary");
+      setPendingAction(() => executeAddPlayer);
+      setShowConfirm(true);
+      return;
     }
 
-    executeAddPlayer();
+    await executeAddPlayer();
   };
 
   const executeRemovePlayers = async () => {
@@ -390,34 +408,34 @@ const AssignCondition: React.FC = () => {
     setStatusMessage(null);
 
     try {
-        const updatedAssignments = currentAssignments.filter(a => !selectedRemovePlins.has(a.plin));
-        const result = await updateCondition(condition!.coin, { assignments: updatedAssignments });
+      const updatedAssignments = currentAssignments.filter(a => !selectedRemovePlins.has(a.plin));
+      const result = await updateCondition(condition!.coin, {assignments: updatedAssignments});
 
-        if (result.success) {
-            if (draftId) {
-                deleteStoredChange(draftId);
-                setDraftId(null);
-                setDraftTimestamp(null);
-            }
-            const removedPlinsStr = Array.from(selectedRemovePlins).join(', ');
-            setStatusMessage({ type: 'success', text: `Unassigned: ${removedPlinsStr}` });
-            setCondition({ ...condition!, assignments: updatedAssignments });
-            setCurrentAssignments(updatedAssignments);
-            setSelectedRemovePlins(new Set());
-            setRemoveFilter('');
-            // Reset baseline
-            setBaselineJson(JSON.stringify({
-                newOwner: '',
-                newExpiry: getDefaultExpiry(),
-                selectedRemovePlins: []
-            }));
-        } else {
-            setStatusMessage({ type: 'error', text: 'Failed to unassign.' });
+      if (result.success) {
+        if (draftId) {
+          deleteStoredChange(draftId);
+          setDraftId(null);
+          setDraftTimestamp(null);
         }
+        const removedPlinsStr = Array.from(selectedRemovePlins).join(', ');
+        setStatusMessage({type: 'success', text: `Unassigned: ${removedPlinsStr}`});
+        setCondition({...condition!, assignments: updatedAssignments});
+        setCurrentAssignments(updatedAssignments);
+        setSelectedRemovePlins(new Set());
+        setRemoveFilter('');
+        // Reset baseline
+        setBaselineJson(JSON.stringify({
+          newOwner: '',
+          newExpiry: getDefaultExpiry(),
+          selectedRemovePlins: []
+        }));
+      } else {
+        setStatusMessage({type: 'error', text: 'Failed to unassign.'});
+      }
     } catch (err) {
-        setStatusMessage({ type: 'error', text: 'Error' });
+      setStatusMessage({type: 'error', text: 'Error'});
     } finally {
-        setIsUpdating(false);
+      setIsUpdating(false);
     }
   };
 
@@ -425,262 +443,301 @@ const AssignCondition: React.FC = () => {
     if (!condition) return;
 
     if (selectedRemovePlins.size === 0) {
-        setStatusMessage({ type: 'error', text: 'Select players to remove.' });
-        return;
+      setStatusMessage({type: 'error', text: 'Select players to remove.'});
+      return;
     }
 
     if (draftId) {
-        setConfirmTitle("Process Draft?");
-        setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-        setConfirmLabel("Process");
-        setConfirmVariant("primary");
-        setPendingAction(() => executeRemovePlayers);
-        setShowConfirm(true);
-        return;
+      setConfirmTitle("Process Draft?");
+      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
+      setConfirmLabel("Process");
+      setConfirmVariant("primary");
+      setPendingAction(() => executeRemovePlayers);
+      setShowConfirm(true);
+      return;
     }
 
-    executeRemovePlayers();
+    await executeRemovePlayers();
   };
 
   const getAssignedPlayersDisplay = () => {
-      if (currentAssignments.length === 0) return 'None';
-      return currentAssignments.map(a => {
-          const n = getCharacterName(a.plin);
-          return n ? `${a.plin} ${n}` : a.plin;
-      }).join('\n');
+    if (currentAssignments.length === 0) return 'None';
+    return currentAssignments.map(a => {
+      const n = getCharacterName(a.plin);
+      return n ? `${a.plin} (${n})` : a.plin;
+    }).join('\n');
   }
 
+  // --- Header/Panel Content Definitions ---
+
+  const headerLeftContent = (
+    // Using Activity icon for Condition/Effect
+    <UserPlusMinus size={20} className="text-entity-condition"/>
+  );
+  const headerRightContent = (
+    draftId && draftTimestamp ? (
+      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+             <span className="font-bold">(Draft)</span> {new Date(draftTimestamp).toLocaleDateString()}
+          </span>
+    ) : null
+  );
+
+  // --- Render (Wrapped in Page and Panel) ---
   return (
-    <div className="mx-auto mt-2 px-2 w-full landscape:w-9/12">
-      <ConfirmModal 
-         isOpen={showConfirm}
-         onClose={() => setShowConfirm(false)}
-         title={confirmTitle}
-         message={confirmMessage}
-         confirmLabel={confirmLabel}
-         confirmVariant={confirmVariant}
-         onConfirm={() => {
-           if (pendingAction) pendingAction();
-           setShowConfirm(false);
-           setPendingAction(null);
-         }}
+    <Page maxWidth="lg">
+
+      <ConfirmModal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmLabel={confirmLabel}
+        confirmVariant={confirmVariant}
+        onConfirm={() => {
+          if (pendingAction) pendingAction();
+          setShowConfirm(false);
+          setPendingAction(null);
+        }}
       />
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-         <div className="flex gap-2">
-            {(returnQuery || returnTo) && (
-              <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
-                <ArrowLeft size={16} />
-              </Button>
-            )}
-            <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate('/'))} title="Dashboard">
-              <Home size={16} />
+
+      {/* External Button Bar */}
+      <div className="mb-3 flex flex-wrap items-center justify-start gap-2">
+        <div className="flex gap-2">
+          {/* Back Button */}
+          {(returnQuery || returnTo) && (
+            <Button variant="secondary" type="button"
+                    onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
+              <ArrowLeft size={16} className="mr-2"/> Back
             </Button>
-            <Button variant="secondary" type="button" onClick={() => confirmAction(handleResetSearch)} title="New Search">
-              <Search size={16} />
-            </Button>
-         </div>
-      </div>
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-panel border border-gray-300 dark:border-gray-600 overflow-hidden">
-        <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center gap-2">
-          <h2 className="text-lg font-display font-bold text-gray-800 dark:text-gray-100 truncate">
-            Assign Condition
-          </h2>
-          <div className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-            {draftId && draftTimestamp ? (
-                <span><span className="font-bold">(Draft)</span> {new Date(draftTimestamp).toLocaleString()}</span>
-            ) : null}
-          </div>
+          )}
+          {/* Home Button */}
+          <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate('/'))}
+                  title="Dashboard">
+            <Home size={16}/>
+          </Button>
+          {/* New Search Button */}
+          <Button variant="secondary" type="button" onClick={() => confirmAction(handleResetSearch)} title="New Search">
+            <Search size={16}/>
+          </Button>
         </div>
+      </div>
+      {/* End External Button Bar */}
+
+      {/* Panel Wrapper */}
+      <Panel
+        title='Assign Condition'
+        headerLeftContent={headerLeftContent}
+        headerRightContent={headerRightContent}
+      >
         <div className="p-4">
-           {!condition && (
-             <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto">
-                <Input
-                  label="Enter COIN"
-                  value={coinSearch}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                    setCoinSearch(val);
-                  }}
-                  placeholder="4-digit ID"
-                  error={searchError}
-                  className="mb-0"
-                  inputMode="numeric"
-                />
-                <div className="flex justify-end">
-                   <Button type="submit" isLoading={isSearching} disabled={!coinSearch}>
-                     <Search size={16} className="mr-2" /> Find
-                   </Button>
+          {!condition && (
+            <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto">
+              <Input
+                label="Enter COIN"
+                value={coinSearch}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setCoinSearch(val);
+                }}
+                placeholder="4-digit ID"
+                error={searchError}
+                className="mb-0"
+                inputMode="numeric"
+              />
+              <div className="flex justify-end">
+                <Button type="submit" isLoading={isSearching} disabled={!coinSearch}>
+                  <Search size={16} className="mr-2"/> Find
+                </Button>
+              </div>
+            </form>
+          )}
+          {condition && (
+            <div className="space-y-2 animation-fade-in">
+              {statusMessage && (
+                <div className={`p-2 rounded border text-sm font-serif ${
+                  statusMessage.type === 'success'
+                    ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
+                    : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
+                }`}>
+                  {statusMessage.text}
                 </div>
-             </form>
-           )}
-           {condition && (
-             <div className="space-y-2 animation-fade-in">
-                {statusMessage && (
-                   <div className={`p-2 rounded border text-sm font-serif ${
-                     statusMessage.type === 'success' 
-                       ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' 
-                       : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-                   }`}>
-                     {statusMessage.text}
-                   </div>
-                )}
-                
-                <div className="flex gap-2">
-                    <div className="w-20 shrink-0">
-                        <Input label="COIN" value={condition.coin} readOnly className="font-mono bg-entity-condition/10 text-entity-condition h-[38px]" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <Input 
-                            label="Assigned Players" 
-                            value={getAssignedPlayersDisplay()} 
-                            readOnly 
-                            placeholder="None" 
-                            multiline={true}
+              )}
+
+              <div className="flex gap-2">
+                <div className="w-20 shrink-0">
+                  <Input label="COIN" value={condition.coin} readOnly
+                         className="font-mono bg-entity-condition/10 text-entity-condition h-[38px]"/>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Input
+                    label="Assigned Players"
+                    value={getAssignedPlayersDisplay()}
+                    readOnly
+                    placeholder="None"
+                    multiline={true}
+                  />
+                </div>
+              </div>
+
+              <Input label="Name" value={condition.name} readOnly/>
+              <Input label="Description" value={condition.description} readOnly multiline rows={3}/>
+
+              <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                  {/* Add Player Panel */}
+                  <div
+                    className="p-4 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30">
+                    <label
+                      className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-2 items-center gap-2">
+                      <UserPlus size={16} className="text-blue-600 dark:text-blue-400"/>
+                      Add Player
+                    </label>
+                    <form onSubmit={handleAddPlayer} className="flex flex-col gap-2 mb-1">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className={`${inputClasses} flex-1 min-w-0`}
+                          value={newOwner}
+                          onChange={handleNewOwnerChange}
+                          placeholder="1234#12"
                         />
-                    </div>
-                </div>
-
-                <Input label="Name" value={condition.name} readOnly />
-                <Input label="Description" value={condition.description} readOnly multiline rows={3} />
-                
-                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      
-                      {/* Add Player Panel */}
-                      <div className="p-4 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30">
-                          <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-2 flex items-center gap-2">
-                             <UserPlus size={16} className="text-blue-600 dark:text-blue-400"/>
-                             Add Player
-                          </label>
-                          <form onSubmit={handleAddPlayer} className="flex flex-col gap-2 mb-1">
-                              <div className="flex gap-2">
-                                <input 
-                                    type="text"
-                                    className={`${inputClasses} flex-1 min-w-0`}
-                                    value={newOwner}
-                                    onChange={handleNewOwnerChange}
-                                    placeholder="1234#12"
-                                />
-                              </div>
-                              <div className="flex gap-2">
-                                <input 
-                                    type="text"
-                                    className={`${inputClasses} flex-1 min-w-0`}
-                                    value={newExpiry}
-                                    onChange={handleExpiryChange}
-                                    placeholder="dd/mm/yyyy"
-                                />
-                                <Button type="submit" isLoading={isUpdating} className="w-24 h-[38px]">Assign</Button>
-                              </div>
-                          </form>
-                          {newOwnerName && (
-                              <div className="text-xs font-bold text-blue-600 dark:text-blue-400 pl-1">
-                                  {newOwnerName}
-                              </div>
-                          )}
                       </div>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          className={`${inputClasses} flex-1 min-w-0`}
+                          value={newExpiry}
+                          onChange={handleExpiryChange}
+                          placeholder="dd/mm/yyyy"
+                        />
+                        <Button
+                          type="submit"
+                          isLoading={isUpdating}
+                          className="w-24 h-[38px]"
+                          disabled={!condition || isUpdating || newOwner.length === 0}
+                        >
+                          Assign
+                        </Button>
+                      </div>
+                    </form>
+                    {newOwnerName && (
+                      <div className="text-xs font-bold text-blue-600 dark:text-blue-400 pl-1">
+                        {newOwnerName}
+                      </div>
+                    )}
+                  </div>
 
-                      {/* Remove Player Panel */}
-                      <div className="p-4 rounded-lg bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 relative" ref={removeDropdownRef}>
-                          <div className="flex justify-between items-center mb-1.5">
-                              <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif flex items-center gap-2">
-                                  <UserMinus size={16} className="text-red-600 dark:text-red-400"/>
-                                  Remove Players
-                              </label>
-                              {selectedRemovePlins.size > 0 && (
-                                  <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 px-2 py-0.5 rounded-full">
+                  {/* Remove Player Panel */}
+                  <div
+                    className="p-4 rounded-lg bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 relative"
+                    ref={removeDropdownRef}>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label
+                        className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif items-center gap-2">
+                        <UserMinus size={16} className="text-red-600 dark:text-red-400"/>
+                        Remove Players
+                      </label>
+                      {selectedRemovePlins.size > 0 && (
+                        <span
+                          className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 px-2 py-0.5 rounded-full">
                                       {selectedRemovePlins.size} Selected
                                   </span>
-                              )}
-                          </div>
-                          
-                          {/* Multi-select Dropdown */}
-                          <div className="relative mb-2">
-                              <div className="relative">
-                                  <input 
-                                      ref={removeInputRef}
-                                      type="text"
-                                      className={`${inputClasses} pr-8`}
-                                      placeholder="Filter players to remove..."
-                                      value={removeFilter}
-                                      onChange={(e) => {
-                                          setRemoveFilter(e.target.value);
-                                          setShowRemoveDropdown(true);
-                                      }}
-                                      onFocus={() => setShowRemoveDropdown(true)}
-                                  />
-                                  <div 
-                                      className="absolute right-0 top-0 h-full w-10 flex items-center justify-center cursor-pointer text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                                      onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (removeFilter) {
-                                              setRemoveFilter('');
-                                              setShowRemoveDropdown(true);
-                                              removeInputRef.current?.focus();
-                                          } else {
-                                              setShowRemoveDropdown(!showRemoveDropdown);
-                                          }
-                                      }}
-                                  >
-                                      {removeFilter ? <X size={16} /> : <ChevronDown size={16} />}
-                                  </div>
-                              </div>
+                      )}
+                    </div>
 
-                              {/* Dropdown Menu - Opens Upwards */}
-                              {showRemoveDropdown && currentAssignments.length > 0 && (
-                                   <div className="absolute bottom-full mb-1 z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto">
-                                       <div 
-                                            className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-pointer text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-2 sticky top-0 z-20"
-                                            onClick={toggleSelectFilteredRemove}
-                                       >
-                                            {isAllFilteredRemoveSelected ? <CheckSquare size={14} /> : <Square size={14} />}
-                                            {isAllFilteredRemoveSelected ? "Deselect All" : "Select All"}
-                                       </div>
-                                       
-                                       {filteredRemoveAssignments.length > 0 ? (
-                                           filteredRemoveAssignments.map(a => {
-                                               const isSelected = selectedRemovePlins.has(a.plin);
-                                               return (
-                                                   <div 
-                                                       key={a.plin} 
-                                                       className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-0 flex items-center gap-3 ${isSelected ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
-                                                       onClick={() => toggleRemovePlinSelect(a.plin)}
-                                                   >
-                                                       <div className={isSelected ? "text-red-600 dark:text-red-400" : "text-gray-400"}>
-                                                           {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                                                       </div>
-                                                       <div className="flex-1">
-                                                           <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{a.plin}</span>
-                                                           <span className="ml-2 text-xs text-gray-500">Exp: {a.expiryDate}</span>
-                                                           {getCharacterName(a.plin) && <div className="text-xs text-gray-500 truncate">{getCharacterName(a.plin)}</div>}
-                                                       </div>
-                                                   </div>
-                                               );
-                                           })
-                                       ) : (
-                                           <div className="px-3 py-2 text-sm text-gray-500 italic text-center">No matches found</div>
-                                       )}
-                                   </div>
-                               )}
-                          </div>
-
-                          <div className="flex justify-end gap-2">
-                              <Button type="button" variant="secondary" onClick={handleSaveDraft}>
-                                <FileText size={16} className="mr-2" /> Save Draft
-                              </Button>
-                              <Button type="button" variant="danger" onClick={handleRemovePlayers} isLoading={isUpdating} className="h-[38px]" disabled={selectedRemovePlins.size === 0}>
-                                  Remove Selected {selectedRemovePlins.size > 0 && `(${selectedRemovePlins.size})`}
-                              </Button>
-                          </div>
+                    {/* Multi-select Dropdown */}
+                    <div className="relative mb-2">
+                      <div className="relative">
+                        <input
+                          ref={removeInputRef}
+                          type="text"
+                          className={`${inputClasses} pr-8`}
+                          placeholder="Filter players to remove..."
+                          value={removeFilter}
+                          onChange={(e) => {
+                            setRemoveFilter(e.target.value);
+                            setShowRemoveDropdown(true);
+                          }}
+                          onFocus={() => setShowRemoveDropdown(true)}
+                        />
+                        <div
+                          className="absolute right-0 top-0 h-full w-10 flex items-center justify-center cursor-pointer text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (removeFilter) {
+                              setRemoveFilter('');
+                              setShowRemoveDropdown(true);
+                              removeInputRef.current?.focus();
+                            } else {
+                              setShowRemoveDropdown(!showRemoveDropdown);
+                            }
+                          }}
+                        >
+                          {removeFilter ? <X size={16}/> : <ChevronDown size={16}/>}
+                        </div>
                       </div>
 
-                   </div>
+                      {/* Dropdown Menu - Opens Upwards */}
+                      {showRemoveDropdown && currentAssignments.length > 0 && (
+                        <div
+                          className="absolute bottom-full mb-1 z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto">
+                          <div
+                            className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-pointer text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-2 sticky top-0 z-20"
+                            onClick={toggleSelectFilteredRemove}
+                          >
+                            {isAllFilteredRemoveSelected ? <CheckSquare size={14}/> : <Square size={14}/>}
+                            {isAllFilteredRemoveSelected ? "Deselect All" : "Select All"}
+                          </div>
+
+                          {filteredRemoveAssignments.length > 0 ? (
+                            filteredRemoveAssignments.map(a => {
+                              const isSelected = selectedRemovePlins.has(a.plin);
+                              return (
+                                <div
+                                  key={a.plin}
+                                  className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-0 flex items-center gap-3 ${isSelected ? 'bg-red-50 dark:bg-red-900/20' : ''}`}
+                                  onClick={() => toggleRemovePlinSelect(a.plin)}
+                                >
+                                  <div className={isSelected ? "text-red-600 dark:text-red-400" : "text-gray-400"}>
+                                    {isSelected ? <CheckSquare size={16}/> : <Square size={16}/>}
+                                  </div>
+                                  <div className="flex-1">
+                                    <span
+                                      className="font-mono font-bold text-gray-700 dark:text-gray-300">{a.plin}</span>
+                                    <span className="ml-2 text-xs text-gray-500">Exp: {a.expiryDate}</span>
+                                    {getCharacterName(a.plin) &&
+                                      <div className="text-xs text-gray-500 truncate">{getCharacterName(a.plin)}</div>}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          ) : (
+                            <div className="px-3 py-2 text-sm text-gray-500 italic text-center">No matches found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="secondary" onClick={handleSaveDraft}
+                              disabled={!isUnsaved || selectedRemovePlins.size === 0}>
+                        <FileText size={16} className="mr-2"/> Save Draft
+                      </Button>
+                      <Button type="button" variant="danger" onClick={handleRemovePlayers} isLoading={isUpdating}
+                              className="h-[38px]" disabled={selectedRemovePlins.size === 0}>
+                        Remove Selected {selectedRemovePlins.size > 0 && `(${selectedRemovePlins.size})`}
+                      </Button>
+                    </div>
+                  </div>
+
                 </div>
-             </div>
-           )}
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
+      </Panel>
+    </Page>
   );
 };
 

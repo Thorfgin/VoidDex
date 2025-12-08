@@ -6,17 +6,21 @@ import ConfirmModal from '../components/ui/ConfirmModal';
 import { searchItemByItin, updateItem, getCharacterName } from '../services/api';
 import { saveStoredChange, deleteStoredChange } from '../services/offlineStorage';
 import { Item } from '../types';
-import { Search, CalendarPlus, Home, ArrowLeft, Save, FileText } from 'lucide-react';
+import { Search, CalendarPlus, Home, ArrowLeft, Save, FileText, BatteryCharging } from 'lucide-react'; // Added Package icon
+
+// Layout Components (NEW IMPORTS)
+import Page from '../components/layout/Page';
+import Panel from '../components/layout/Panel';
 
 const RechargeItem: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
+
   // Search State
   const [itinSearch, setItinSearch] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
-  
+
   // Navigation return logic
   const returnQuery = location.state?.returnQuery;
   const returnTo = location.state?.returnTo;
@@ -24,7 +28,7 @@ const RechargeItem: React.FC = () => {
   // Item Data
   const [item, setItem] = useState<Item | null>(null);
   const [expiryDate, setExpiryDate] = useState('');
-  
+
   // UI State
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -40,7 +44,7 @@ const RechargeItem: React.FC = () => {
   // --- DIRTY CHECKING BASELINE ---
   const [baselineExpiry, setBaselineExpiry] = useState('');
 
-  // Check if current state differs from the last saved/loaded state
+  // Check if the current state differs from the last saved/loaded state
   const isUnsaved = item !== null && expiryDate !== baselineExpiry && !statusMessage?.text.includes("Success");
 
   const inputClasses = "w-full px-3 py-2 border rounded shadow-inner font-serif text-sm transition-all duration-200 border-gray-300 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none bg-white text-gray-900 dark:bg-gray-900 dark:text-white dark:border-gray-600";
@@ -50,7 +54,6 @@ const RechargeItem: React.FC = () => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isUnsaved) {
         e.preventDefault();
-        e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -73,21 +76,21 @@ const RechargeItem: React.FC = () => {
   // --- INITIALIZATION ---
   useEffect(() => {
     if (location.state) {
-        if (location.state.initialData) {
-             const { item: savedItem, expiryDate: savedExpiry } = location.state.initialData;
-             setItem(savedItem);
-             setItinSearch(savedItem.itin);
-             setExpiryDate(savedExpiry);
-             setBaselineExpiry(savedExpiry);
-             if (location.state.draftId) setDraftId(location.state.draftId);
-             if (location.state.draftTimestamp) setDraftTimestamp(location.state.draftTimestamp);
-        } else if (location.state.item) {
-             const passedItem = location.state.item as Item;
-             setItem(passedItem);
-             setItinSearch(passedItem.itin);
-             setExpiryDate(passedItem.expiryDate);
-             setBaselineExpiry(passedItem.expiryDate);
-        }
+      if (location.state.initialData) {
+        const { item: savedItem, expiryDate: savedExpiry } = location.state.initialData;
+        setItem(savedItem);
+        setItinSearch(savedItem.itin);
+        setExpiryDate(savedExpiry);
+        setBaselineExpiry(savedExpiry);
+        if (location.state.draftId) setDraftId(location.state.draftId);
+        if (location.state.draftTimestamp) setDraftTimestamp(location.state.draftTimestamp);
+      } else if (location.state.item) {
+        const passedItem = location.state.item as Item;
+        setItem(passedItem);
+        setItinSearch(passedItem.itin);
+        setExpiryDate(passedItem.expiryDate);
+        setBaselineExpiry(passedItem.expiryDate);
+      }
     }
   }, [location.state]);
 
@@ -152,7 +155,7 @@ const RechargeItem: React.FC = () => {
     setBaselineExpiry(expiryDate);
     setStatusMessage({ type: 'success', text: 'Draft saved successfully.' });
     setTimeout(() => {
-        setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
+      setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
     }, 3000);
   };
 
@@ -194,23 +197,23 @@ const RechargeItem: React.FC = () => {
   };
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-     const val = e.target.value;
-     if (expiryDate && val.length < expiryDate.length) {
-         setExpiryDate(val);
-     } else {
-         setExpiryDate(formatDate(val));
-     }
+    const val = e.target.value;
+    if (expiryDate && val.length < expiryDate.length) {
+      setExpiryDate(val);
+    } else {
+      setExpiryDate(formatDate(val));
+    }
   };
 
   const handleAddYearAndRound = () => {
     if (!expiryDate) return;
-    setStatusMessage(null); 
+    setStatusMessage(null);
 
     const parts = expiryDate.split('/');
     if (parts.length !== 3) return;
 
     const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; 
+    const month = parseInt(parts[1], 10) - 1;
     const year = parseInt(parts[2], 10);
 
     const date = new Date(year, month, day);
@@ -220,12 +223,12 @@ const RechargeItem: React.FC = () => {
     date.setFullYear(date.getFullYear() + 1);
 
     if (date.getDate() !== 1) {
-        date.setDate(1);
-        date.setMonth(date.getMonth() + 1);
+      date.setDate(1);
+      date.setMonth(date.getMonth() + 1);
     }
 
     if (date.getFullYear() > 2100) {
-        return; 
+      return;
     }
 
     const newDay = String(date.getDate()).padStart(2, '0');
@@ -241,18 +244,18 @@ const RechargeItem: React.FC = () => {
     if (y < 1980 || y > 2100) return 'Year must be between 1980 and 2100';
     const date = new Date(y, m - 1, d);
     if (date.getFullYear() !== y || date.getMonth() + 1 !== m || date.getDate() !== d) {
-        return 'Invalid calendar date';
+      return 'Invalid calendar date';
     }
     return null;
   };
 
   const executeUpdate = async () => {
     if (!item) return;
-    
+
     const dateError = validateExpiryDate(expiryDate);
     if (dateError) {
-        setStatusMessage({ type: 'error', text: dateError });
-        return;
+      setStatusMessage({ type: 'error', text: dateError });
+      return;
     }
 
     setIsUpdating(true);
@@ -262,13 +265,13 @@ const RechargeItem: React.FC = () => {
       const result = await updateItem(item.itin, { expiryDate });
       if (result.success) {
         if (draftId) {
-            deleteStoredChange(draftId);
-            setDraftId(null);
-            setDraftTimestamp(null);
+          deleteStoredChange(draftId);
+          setDraftId(null);
+          setDraftTimestamp(null);
         }
         setStatusMessage({ type: 'success', text: `Success! Expiry updated from ${oldExpiry} to ${expiryDate}` });
         setItem({...item, expiryDate});
-        setBaselineExpiry(expiryDate); 
+        setBaselineExpiry(expiryDate);
       } else {
         setStatusMessage({ type: 'error', text: 'Failed.' });
       }
@@ -280,16 +283,16 @@ const RechargeItem: React.FC = () => {
   };
 
   const handleUpdate = () => {
-      if (draftId) {
-          setConfirmTitle("Process Draft?");
-          setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-          setConfirmLabel("Process");
-          setConfirmVariant("primary");
-          setPendingAction(() => executeUpdate);
-          setShowConfirm(true);
-          return;
-      }
-      executeUpdate();
+    if (draftId) {
+      setConfirmTitle("Process Draft?");
+      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
+      setConfirmLabel("Process");
+      setConfirmVariant("primary");
+      setPendingAction(() => executeUpdate);
+      setShowConfirm(true);
+      return;
+    }
+    executeUpdate().then( () => null);
   };
 
   const formatOwner = (plin: string) => {
@@ -297,134 +300,149 @@ const RechargeItem: React.FC = () => {
     return name ? `${plin} ${name}` : plin;
   };
 
+  // --- Header/Panel Content Definitions ---
+
+  const headerLeftContent = (
+    <BatteryCharging size={20} className="text-entity-item" /> // Use a Recharge icon
+  );
+
+  // Conditionally show draft timestamp in the header right content
+  const headerRightContent = (
+    draftId && draftTimestamp ? (
+      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+             <span className="font-bold">(Draft)</span> {new Date(draftTimestamp).toLocaleDateString()}
+          </span>
+    ) : null
+  );
+
   return (
-    <div className="mx-auto mt-2 px-2 w-full landscape:w-9/12">
-      
-      <ConfirmModal 
-         isOpen={showConfirm}
-         onClose={() => setShowConfirm(false)}
-         title={confirmTitle}
-         message={confirmMessage}
-         confirmLabel={confirmLabel}
-         confirmVariant={confirmVariant}
-         onConfirm={() => {
-           if (pendingAction) pendingAction();
-           setShowConfirm(false);
-           setPendingAction(null);
-         }}
+    <Page maxWidth="lg">
+
+      <ConfirmModal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        title={confirmTitle}
+        message={confirmMessage}
+        confirmLabel={confirmLabel}
+        confirmVariant={confirmVariant}
+        onConfirm={() => {
+          if (pendingAction) pendingAction();
+          setShowConfirm(false);
+          setPendingAction(null);
+        }}
       />
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-         <div className="flex gap-2">
-            {(returnQuery || returnTo) && (
-              <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
-                <ArrowLeft size={16} />
-              </Button>
-            )}
-            <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate('/'))} title="Dashboard">
-              <Home size={16} />
+      {/* External Button Bar */}
+      <div className="mb-3 flex flex-wrap items-center justify-start gap-2">
+        <div className="flex gap-2">
+          {/* Back Button */}
+          {(returnQuery || returnTo) && (
+            <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
+              <ArrowLeft size={16} className="mr-2" /> Back
             </Button>
-            <Button variant="secondary" type="button" onClick={() => confirmAction(handleResetSearch)} title="New Search">
-              <Search size={16} />
-            </Button>
-         </div>
-      </div>
-
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-panel border border-gray-300 dark:border-gray-600 overflow-hidden">
-        <div className="bg-gray-100 dark:bg-gray-700 px-4 py-2 border-b border-gray-300 dark:border-gray-600 flex justify-between items-center gap-2">
-          <h2 className="text-lg font-display font-bold text-gray-800 dark:text-gray-100 truncate">
-            Recharge Item
-          </h2>
-          <div className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
-            {draftId && draftTimestamp ? (
-                <span><span className="font-bold">(Draft)</span> {new Date(draftTimestamp).toLocaleString()}</span>
-            ) : null}
-          </div>
+          )}
+          {/* Home Button */}
+          <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate('/'))} title="Dashboard">
+            <Home size={16} />
+          </Button>
+          {/* New Search Button */}
+          <Button variant="secondary" type="button" onClick={() => confirmAction(handleResetSearch)} title="New Search">
+            <Search size={16} />
+          </Button>
         </div>
+      </div>
+      {/* End External Button Bar */}
 
+      {/* Panel Wrapper */}
+      <Panel
+        title="Recharge Item"
+        headerLeftContent={headerLeftContent}
+        headerRightContent={headerRightContent}
+      >
+        {/* The content that was previously inside the Panel-like div */}
         <div className="p-4">
-           {!item && (
-             <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto">
-                <Input
-                  label="Enter ITIN"
-                  value={itinSearch}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                    setItinSearch(val);
-                  }}
-                  placeholder="4-digit ID"
-                  error={searchError}
-                  className="mb-0"
-                  inputMode="numeric"
+          {!item && (
+            <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto">
+              <Input
+                label="Enter ITIN"
+                value={itinSearch}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setItinSearch(val);
+                }}
+                placeholder="4-digit ID"
+                error={searchError}
+                className="mb-0"
+                inputMode="numeric"
+              />
+              <div className="flex justify-end">
+                <Button type="submit" isLoading={isSearching} disabled={!itinSearch}>
+                  <Search size={16} className="mr-2" /> Find
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {item && (
+            <div className="space-y-2 animation-fade-in">
+              {statusMessage && (
+                <div className={`p-2 rounded border text-sm font-serif ${
+                  statusMessage.type === 'success'
+                    ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
+                    : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
+                }`}>
+                  {statusMessage.text}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <div className="w-20 shrink-0">
+                  <Input label="ITIN" value={item.itin} readOnly className="font-mono bg-gray-50" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Input label="Player (PLIN)" value={formatOwner(item.owner)} readOnly multiline={true} />
+                </div>
+              </div>
+
+              <Input label="Name" value={item.name} readOnly />
+              <Input label="Description" value={item.description} readOnly multiline rows={3} />
+              <Input label="Remarks" value={item.remarks || ''} readOnly multiline rows={3} />
+              <Input label="CS Remarks" value={item.csRemarks || ''} readOnly multiline rows={3} />
+
+              <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-1.5">Expiry Date:</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className={`${inputClasses} flex-1 min-w-0`}
+                  value={expiryDate}
+                  onChange={handleDateChange}
+                  placeholder="dd/mm/yyyy"
                 />
-                <div className="flex justify-end">
-                   <Button type="submit" isLoading={isSearching} disabled={!itinSearch}>
-                     <Search size={16} className="mr-2" /> Find
-                   </Button>
-                </div>
-             </form>
-           )}
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={handleAddYearAndRound}
+                  title="+1 Year (Round to 1st)"
+                  className="h-[38px] w-[38px] shrink-0"
+                  style={{ padding: 0 }}
+                >
+                  <CalendarPlus size={24} strokeWidth={2} />
+                </Button>
+              </div>
 
-           {item && (
-             <div className="space-y-2 animation-fade-in">
-                {statusMessage && (
-                   <div className={`p-2 rounded border text-sm font-serif ${
-                     statusMessage.type === 'success' 
-                       ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' 
-                       : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-                   }`}>
-                     {statusMessage.text}
-                   </div>
-                )}
-                
-                <div className="flex gap-2">
-                   <div className="w-20 shrink-0">
-                     <Input label="ITIN" value={item.itin} readOnly className="font-mono bg-gray-50" />
-                   </div>
-                   <div className="flex-1 min-w-0">
-                     <Input label="Player (PLIN)" value={formatOwner(item.owner)} readOnly multiline={true} />
-                   </div>
-                </div>
-
-                <Input label="Name" value={item.name} readOnly />
-                <Input label="Description" value={item.description} readOnly multiline rows={3} />
-                <Input label="Remarks" value={item.remarks || ''} readOnly multiline rows={3} />
-                <Input label="CS Remarks" value={item.csRemarks || ''} readOnly multiline rows={3} />
-                
-                <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-1.5">Expiry Date:</label>
-                <div className="flex gap-2">
-                     <input 
-                         type="text"
-                         className={`${inputClasses} flex-1 min-w-0`}
-                         value={expiryDate}
-                         onChange={handleDateChange}
-                         placeholder="dd/mm/yyyy"
-                     />
-                      <Button 
-                        variant="secondary" 
-                        type="button" 
-                        onClick={handleAddYearAndRound} 
-                        title="+1 Year (Round to 1st)" 
-                        className="h-[38px] w-[38px]"
-                        style={{ padding: 0 }}
-                      >
-                        <CalendarPlus size={24} strokeWidth={2} />
-                      </Button>
-                </div>
-
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                  <Button type="button" variant="secondary" onClick={handleSaveDraft}>
-                    <FileText size={16} className="mr-2" /> Save Draft
-                  </Button>
-                  <Button type="button" onClick={handleUpdate} isLoading={isUpdating}>
-                    <Save size={16} className="mr-2" /> Update
-                  </Button>
-                </div>
-             </div>
-           )}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+                <Button type="button" variant="secondary" onClick={handleSaveDraft}>
+                  <FileText size={16} className="mr-2" /> Save Draft
+                </Button>
+                <Button type="button" onClick={handleUpdate} isLoading={isUpdating} disabled={!isUnsaved}>
+                  <Save size={16} className="mr-2" /> Update
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
-      </div>
-    </div>
+      </Panel>
+    </Page>
   );
 };
 

@@ -19,8 +19,8 @@ import StoredChanges from './pages/StoredChanges';
 import MyNotes from './pages/MyNotes';
 import CreateNote from './pages/CreateNote';
 import { resetData } from './services/api';
-import Login from "./pages/Login.tsx";
-import AuthCallback from './pages/AuthCallback.tsx';
+import Login from "./pages/Login";
+import AuthCallback from './pages/AuthCallback';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type AppThemeId = 'futura' | 'modern' | 'historic';
