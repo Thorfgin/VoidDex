@@ -2,13 +2,13 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowLeft, AlertTriangle } from 'lucide-react';
 
-// Layout Components (Panel is now imported)
+// Layout Components
 import Page from '../components/layout/Page';
 import Panel from '../components/layout/Panel';
 
 import Button from '../components/ui/Button';
 
-// Declare external library type
+/** Declares the global type for the external HTML5 QR Code library. */
 declare const Html5Qrcode: any;
 
 const Scanner: React.FC = () => {
@@ -18,7 +18,6 @@ const Scanner: React.FC = () => {
   const scannerRef = useRef<any>(null);
   const isMounted = useRef(true);
 
-  // --- useEffect (Camera and Cleanup Logic) ---
   useEffect(() => {
     isMounted.current = true;
 
@@ -28,6 +27,10 @@ const Scanner: React.FC = () => {
       return;
     }
 
+    /**
+     * Handles a successful QR code scan. Extracts the ID and navigates to the corresponding resource page.
+     * @param decodedText The text decoded from the QR code.
+     */
     const onScanSuccess = (decodedText: string) => {
       if (!isMounted.current) return;
 
@@ -61,9 +64,11 @@ const Scanner: React.FC = () => {
       }
     };
 
+    /**
+     * Initializes and starts the HTML5 QR Code scanner.
+     */
     const startScanner = async () => {
       try {
-        // The "reader" div is now inside the Panel body
         const html5QrCode = new Html5Qrcode("reader");
         scannerRef.current = html5QrCode;
 
@@ -100,7 +105,6 @@ const Scanner: React.FC = () => {
 
     const timer = setTimeout(startScanner, 100);
 
-    // --- CLEANUP ---
     return () => {
       isMounted.current = false;
       clearTimeout(timer);
@@ -120,43 +124,35 @@ const Scanner: React.FC = () => {
     };
   }, [navigate]);
 
-  // --- Header Definition for Panel ---
+  /** Content for the left side of the panel header. */
   const headerLeftContent = (
     <div className="w-10 h-10"></div>
   );
 
-  // Empty content to maintain layout symmetry.
+  /** Content for the right side of the panel header. */
   const headerRightContent = (
     <div className="w-10 h-10"></div>
   );
 
   const title = 'SCAN CODE';
 
-  // --- Render ---
   return (
     <Page maxWidth="md">
-      {/* Button row above panel (as seen in CreateNote/MyNotes) */}
       <div className="flex w-full justify-start mb-3">
         <Button variant="secondary" onClick={() => navigate(-1)}>
           <ArrowLeft size={16}/>
         </Button>
       </div>
 
-      {/* Panel Wrapper */}
       <Panel
         title={title}
         headerLeftContent={headerLeftContent}
         headerRightContent={headerRightContent}
-        // Use an empty string for Panel's body padding to maximize scanner area
         className={"p-0"}
       >
-        {/* Scanner Area: Maximize the square size within the Panel's body */}
-        {/* mx-auto centers the scanner area */}
         <div className="w-full max-w-lg bg-black rounded-lg overflow-hidden shadow-xl relative aspect-square border-2 border-gray-800 mx-auto">
-          {/* Scan Area - The library attaches video element here */}
           <div id="reader" className="w-full h-full"></div>
 
-          {/* Overlay Loader or Error Message */}
           {(isLoading || error) && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-white p-6 text-center bg-black/80 z-10">
               {error ? (
@@ -175,7 +171,6 @@ const Scanner: React.FC = () => {
           )}
         </div>
 
-        {/* Instructions below the scanner, still inside the Panel, but with custom padding */}
         <div className="mt-4 pb-4 text-center px-4">
           <p className="text-gray-600 dark:text-gray-400 font-serif text-sm">
             Point your camera at a VoidDex QR code.

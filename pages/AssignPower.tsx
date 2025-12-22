@@ -1,18 +1,31 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Input from '../components/ui/Input';
-import Button from '../components/ui/Button';
-import ConfirmModal from '../components/ui/ConfirmModal';
 import { searchPowerByPoin, updatePower, getCharacterName } from '../services/api';
 import { saveStoredChange, deleteStoredChange } from '../services/offlineStorage';
 import { Power, Assignment } from '../types';
-import { Search, Home, ArrowLeft, UserMinus, UserPlus, ChevronDown, CheckSquare, Square, X, FileText } from 'lucide-react';
-import UserPlusMinus from '../components/icons/UserPlusMinus';
 
-// Layout Components
+// IMPORT COMPONENTS
+import UserPlusMinus from '../components/icons/UserPlusMinus';
 import Page from '../components/layout/Page';
 import Panel from '../components/layout/Panel';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import ConfirmModal from '../components/ui/ConfirmModal';
+import { Search, Home, ArrowLeft, UserMinus, UserPlus, ChevronDown, CheckSquare, Square, X, FileText, AlertTriangle } from 'lucide-react';
 
+// IMPORT UTILS
+import { getDefaultExpiry, formatDate } from '../utils/dateUtils';
+import { formatPLIN } from '../utils/playerUtils';
+
+type ModalConfig = {
+  isOpen: boolean;
+  title: string;
+  message: React.ReactNode;
+  primaryAction: React.ComponentProps<typeof ConfirmModal>['primaryAction'];
+  secondaryAction?: React.ComponentProps<typeof ConfirmModal>['secondaryAction'];
+  icon?: React.ComponentProps<typeof ConfirmModal>['icon'];
+  iconColorClass?: string;
+}
 
 const AssignPower: React.FC = () => {
   const navigate = useNavigate();
@@ -29,7 +42,7 @@ const AssignPower: React.FC = () => {
 
   // Inputs for Adding
   const [newOwner, setNewOwner] = useState('');
-  const [newExpiry, setNewExpiry] = useState('');
+  const [newExpiry, setNewExpiry] = useState(getDefaultExpiry());
 
   // Inputs for Removing (Multi-select)
   const [selectedRemovePlins, setSelectedRemovePlins] = useState<Set<string>>(new Set());
@@ -41,38 +54,28 @@ const AssignPower: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState("Discard Changes?");
-  const [confirmMessage, setConfirmMessage] = useState("You have unsaved changes. Are you sure you want to discard them?");
-  const [confirmLabel, setConfirmLabel] = useState("Discard");
-  const [confirmVariant, setConfirmVariant] = useState<'primary'|'danger'>("danger");
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
   const [draftId, setDraftId] = useState<string | null>(() => location.state?.draftId || null);
   const [draftTimestamp, setDraftTimestamp] = useState<number | null>(() => location.state?.draftTimestamp || null);
 
-  const newOwnerName = getCharacterName(newOwner);
+  const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
 
-  // Baseline to track unsaved changes
+  const newOwnerName = getCharacterName(newOwner);
   const [baselineJson, setBaselineJson] = useState('');
 
+  const closeModal = () => setModalConfig(null);
+
+  /**
+   * Generates a JSON string representing the current state of the assignment form
+   * (new owner, expiry, and removals) for comparison against the baseline.
+   */
   const getCurrentStateString = () => JSON.stringify({
     newOwner,
     newExpiry,
     selectedRemovePlins: Array.from(selectedRemovePlins).sort()
   });
 
-  const isUnsaved = power !== null && getCurrentStateString() !== baselineJson && !statusMessage?.text.includes("Assigned");
-
-  const getDefaultExpiry = () => {
-    const date = new Date();
-    date.setDate(1);
-    date.setMonth(date.getMonth() + 1);
-    date.setFullYear(date.getFullYear() + 1);
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-  };
+  // FIXED: Removed the statusMessage check. isUnsaved should only check for state difference.
+  const isUnsaved = power !== null && getCurrentStateString() !== baselineJson;
 
   const inputClasses = "w-full px-3 py-2 border rounded shadow-inner font-serif text-sm transition-all duration-200 border-gray-300 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none bg-white text-gray-900 dark:bg-gray-900 dark:text-white dark:border-gray-600";
 
@@ -97,14 +100,28 @@ const AssignPower: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  /**
+   * Configures and shows the confirmation modal if unsaved changes exist,
+   * otherwise executes the action directly.
+   * @param action The function to execute if changes are discarded or no changes exist.
+   */
   const confirmAction = (action: () => void) => {
     if (isUnsaved) {
-      setConfirmTitle("Discard Changes?");
-      setConfirmMessage("You have unsaved changes. Are you sure you want to discard them?");
-      setConfirmLabel("Discard");
-      setConfirmVariant("danger");
-      setPendingAction(() => action);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Discard Changes?",
+        message: "You have unsaved changes. Are you sure you want to discard them?",
+        primaryAction: {
+          label: "Discard",
+          handler: () => {
+            action();
+            closeModal();
+          },
+          variant: "danger",
+        },
+        icon: AlertTriangle,
+        iconColorClass: "text-amber-600 dark:text-amber-500",
+      });
     } else {
       action();
     }
@@ -122,11 +139,9 @@ const AssignPower: React.FC = () => {
         setNewOwner(savedNewOwner);
         setNewExpiry(savedNewExpiry);
 
-        // Safe default for the potentially undefined array from old drafts
         const safeRemovePlins = savedRemovePlins || [];
         setSelectedRemovePlins(new Set(safeRemovePlins));
 
-        // Set baseline from draft
         setBaselineJson(JSON.stringify({
           newOwner: savedNewOwner,
           newExpiry: savedNewExpiry,
@@ -143,7 +158,6 @@ const AssignPower: React.FC = () => {
           setCurrentAssignments(passedItem.assignments || []);
           const defExp = getDefaultExpiry();
           setNewExpiry(defExp);
-          // Baseline for new item to load
           setBaselineJson(JSON.stringify({
             newOwner: '',
             newExpiry: defExp,
@@ -194,7 +208,6 @@ const AssignPower: React.FC = () => {
         const pow = result.data;
         setPower(pow);
         setCurrentAssignments(pow.assignments || []);
-        // Set baseline
         setBaselineJson(JSON.stringify({
           newOwner: '',
           newExpiry: getDefaultExpiry(),
@@ -225,50 +238,11 @@ const AssignPower: React.FC = () => {
     });
     setDraftId(id);
     setDraftTimestamp(now);
-    setBaselineJson(getCurrentStateString()); // Update baseline
+    setBaselineJson(getCurrentStateString());
     setStatusMessage({ type: 'success', text: 'Draft saved successfully.' });
     setTimeout(() => {
       setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
     }, 3000);
-  };
-
-  const formatPLIN = (val: string) => {
-    const clean = val.replace(/[^0-9#]/g, '');
-    if (clean.includes('#')) {
-      const parts = clean.split('#');
-      return `${parts[0].slice(0, 4)}#${parts.slice(1).join('').slice(0, 2)}`;
-    }
-    if (clean.length > 4) {
-      return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
-    }
-    return clean;
-  };
-
-  const formatDate = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    let day = clean.slice(0, 2);
-    let month = clean.slice(2, 4);
-    let year = clean.slice(4, 8);
-
-    if (day.length === 2) {
-      let d = parseInt(day, 10);
-      if (d > 31) d = 31;
-      if (d < 1) d = 1;
-      day = d.toString().padStart(2, '0');
-    }
-    if (month.length === 2) {
-      let m = parseInt(month, 10);
-      if (m > 12) m = 12;
-      if (m < 1) m = 1;
-      month = m.toString().padStart(2, '0');
-    }
-    if (year.length === 4) {
-      let y = parseInt(year, 10);
-      if (y > 2100) y = 2100;
-      if (y < 1980) y = 1980;
-      year = y.toString();
-    }
-    return day + (clean.length >= 3 ? `/${month}` : '') + (clean.length >= 5 ? `/${year}` : '');
   };
 
   const handleNewOwnerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -295,7 +269,6 @@ const AssignPower: React.FC = () => {
     setStatusMessage(null);
   };
 
-  // Filter assignments based on input
   const filteredRemoveAssignments = currentAssignments.filter(a => {
     const search = removeFilter.toLowerCase();
     const name = getCharacterName(a.plin) || '';
@@ -304,14 +277,11 @@ const AssignPower: React.FC = () => {
 
   const toggleSelectFilteredRemove = () => {
     const newSet = new Set(selectedRemovePlins);
-    // Check if all *visible* elements are selected
     const allFilteredSelected = filteredRemoveAssignments.length > 0 && filteredRemoveAssignments.every(a => newSet.has(a.plin));
 
     if (allFilteredSelected) {
-      // Deselect only the filtered ones
       filteredRemoveAssignments.forEach(a => newSet.delete(a.plin));
     } else {
-      // Select all filtered ones
       filteredRemoveAssignments.forEach(a => newSet.add(a.plin));
     }
     setSelectedRemovePlins(newSet);
@@ -338,7 +308,6 @@ const AssignPower: React.FC = () => {
         setCurrentAssignments(updatedAssignments);
         setNewOwner('');
         setNewExpiry(getDefaultExpiry());
-        // Reset baseline for next action
         setBaselineJson(JSON.stringify({
           newOwner: '',
           newExpiry: getDefaultExpiry(),
@@ -373,18 +342,24 @@ const AssignPower: React.FC = () => {
       return;
     }
 
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(newExpiry) && newExpiry !== 'until death') {
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(newExpiry) && newExpiry.toLowerCase() !== 'until death') {
       setStatusMessage({ type: 'error', text: 'Invalid Expiry Date format.' });
       return;
     }
 
     if (draftId) {
-      setConfirmTitle("Process Draft?");
-      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-      setConfirmLabel("Process");
-      setConfirmVariant("primary");
-      setPendingAction(() => executeAddPlayer);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Process Draft?",
+        message: "The object may have been changed since this draft was stored. Proceed?",
+        primaryAction: {
+          label: "Process",
+          handler: () => { executeAddPlayer(); closeModal(); },
+          variant: "primary",
+        },
+        icon: FileText,
+        iconColorClass: "text-blue-600 dark:text-blue-400",
+      });
       return;
     }
 
@@ -411,7 +386,6 @@ const AssignPower: React.FC = () => {
         setCurrentAssignments(updatedAssignments);
         setSelectedRemovePlins(new Set());
         setRemoveFilter('');
-        // Reset baseline
         setBaselineJson(JSON.stringify({
           newOwner: '',
           newExpiry: getDefaultExpiry(),
@@ -436,12 +410,18 @@ const AssignPower: React.FC = () => {
     }
 
     if (draftId) {
-      setConfirmTitle("Process Draft?");
-      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-      setConfirmLabel("Process");
-      setConfirmVariant("primary");
-      setPendingAction(() => executeRemovePlayers);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Process Draft?",
+        message: "The object may have been changed since this draft was stored. Proceed?",
+        primaryAction: {
+          label: "Process",
+          handler: () => { executeRemovePlayers(); closeModal(); },
+          variant: "primary",
+        },
+        icon: FileText,
+        iconColorClass: "text-blue-600 dark:text-blue-400",
+      });
       return;
     }
 
@@ -452,11 +432,9 @@ const AssignPower: React.FC = () => {
     if (currentAssignments.length === 0) return 'None';
     return currentAssignments.map(a => {
       const n = getCharacterName(a.plin);
-      return n ? `${a.plin} ${n}` : a.plin;
+      return n ? `${a.plin} (${n})` : a.plin;
     }).join('\n');
   }
-
-  // --- Header/Panel Content Definitions ---
 
   const headerLeftContent = (<UserPlusMinus size={20} className="text-entity-power" />);
   const headerRightContent = (
@@ -467,22 +445,21 @@ const AssignPower: React.FC = () => {
     ) : null
   );
 
-  // --- Render (Wrapped in Page and Panel) ---
   return (
     <Page maxWidth="lg">
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        title={confirmTitle}
-        message={confirmMessage}
-        confirmLabel={confirmLabel}
-        confirmVariant={confirmVariant}
-        onConfirm={() => {
-          if (pendingAction) pendingAction();
-          setShowConfirm(false);
-          setPendingAction(null);
-        }}
-      />
+
+      {modalConfig && (
+        <ConfirmModal
+          isOpen={modalConfig.isOpen}
+          onClose={closeModal}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          primaryAction={modalConfig.primaryAction}
+          secondaryAction={modalConfig.secondaryAction}
+          icon={modalConfig.icon}
+          iconColorClass={modalConfig.iconColorClass}
+        />
+      )}
 
       {/* External Button Bar */}
       <div className="mb-3 flex flex-wrap items-center justify-start gap-2">
@@ -490,7 +467,7 @@ const AssignPower: React.FC = () => {
           {/* Back Button */}
           {(returnQuery || returnTo) && (
             <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
-              <ArrowLeft size={16} className="mr-2" /> Back
+              <ArrowLeft size={16} />
             </Button>
           )}
           {/* Home Button */}
@@ -590,7 +567,7 @@ const AssignPower: React.FC = () => {
                           onChange={handleExpiryChange}
                           placeholder="dd/mm/yyyy"
                         />
-                        <Button type="submit" isLoading={isUpdating} className="w-24 h-[38px]">Assign</Button>
+                        <Button type="submit" isLoading={isUpdating} className="w-24 h-[38px]" disabled={!power || isUpdating || newOwner.length === 0}>Assign</Button>
                       </div>
                     </form>
                     {newOwnerName && (
@@ -684,10 +661,8 @@ const AssignPower: React.FC = () => {
                       )}
                     </div>
 
-                    <div className="flex justify-end gap-2">
-                      <Button type="button" variant="secondary" onClick={handleSaveDraft}>
-                        <FileText size={16} className="mr-2" /> Save Draft
-                      </Button>
+                    {/* Only the Remove button remains in this panel */}
+                    <div className="flex justify-end">
                       <Button type="button" variant="danger" onClick={handleRemovePlayers} isLoading={isUpdating} className="h-[38px]" disabled={selectedRemovePlins.size === 0}>
                         Remove Selected {selectedRemovePlins.size > 0 && `(${selectedRemovePlins.size})`}
                       </Button>
@@ -695,6 +670,21 @@ const AssignPower: React.FC = () => {
                   </div>
 
                 </div>
+
+                {/* --- NEW DEDICATED ACTION BAR FOR DRAFT --- */}
+                {/* Placed after the grid container */}
+                <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSaveDraft}
+                    //disabled={!isUnsaved} // CORRECTED: Only checks for state difference.
+                    title="Save the current assignment and removal changes as a local draft"
+                  >
+                    Save Draft
+                  </Button>
+                </div>
+                {/* ------------------------------------------- */}
               </div>
             </div>
           )}

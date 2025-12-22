@@ -1,11 +1,9 @@
 import { fireEvent, waitFor, screen } from '@testing-library/react';
 import { describe, test, jest, beforeEach } from '@jest/globals';
 import CreateCondition from './CreateCondition';
-// @ts-ignore
 import * as api from '../services/api';
-// @ts-ignore
 import * as offlineStorage from '../services/offlineStorage';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 
 jest.mock('../services/api', () => ({
   createCondition: jest.fn(),
@@ -89,12 +87,11 @@ describe('CreateCondition Page', () => {
     const expiryInput = screen.getByPlaceholderText(
         "dd/mm/yyyy (Empty = 'until death')",
     );
-    fireEvent.change(expiryInput, { target: { value: '010120' } }); // becomes 01/01/20 internally, but still fails regex
-
+    fireEvent.change(expiryInput, { target: { value: '01012025' } });
     fireEvent.submit(form);
 
     expect(
-        await findByText('Expiry Date must be DD/MM/YYYY or Empty'),
+      await findByText(/Expiry Date must be DD\/MM\/YYYY/),
     ).toBeTruthy();
     expect(apiMock.createCondition).not.toHaveBeenCalled();
   });

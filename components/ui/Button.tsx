@@ -3,25 +3,29 @@ import React from 'react';
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger';
   isLoading?: boolean;
+
+  // Explicitly declare data-testid
+  'data-testid'?: string;
 }
 
 /**
  * Standard UI Button Component.
  * Supports loading states.
- * Adapts to theme via CSS variables for radius and padding.
  */
-const Button: React.FC<ButtonProps> = ({ 
-  children, 
-  variant = 'primary', 
-  isLoading = false, 
-  className = '', 
-  disabled,
-  type = 'button',
-  ...props 
-}) => {
+const Button: React.FC<ButtonProps> = ({
+                                         children,
+                                         variant = 'primary',
+                                         isLoading = false,
+                                         className = '',
+                                         disabled,
+                                         type = 'button',
+                                         'data-testid': dataTestId, // Destructure data-testid
+                                         ...props
+                                       }) => {
+
   // Base styles: rounded-md maps to var(--radius-btn), font-serif maps to var(--font-body)
   const baseStyles = "rounded-md font-serif font-bold text-sm transition-all duration-200 flex items-center justify-center border shadow-sm active:translate-y-px select-none";
-  
+
   // Apply dynamic padding using style prop to use CSS variables
   const dynamicStyle = {
     paddingTop: 'var(--btn-py)',
@@ -38,11 +42,12 @@ const Button: React.FC<ButtonProps> = ({
   };
 
   return (
-    <button 
+    <button
       type={type}
       className={`${baseStyles} ${variants[variant]} ${className} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
       style={dynamicStyle}
       disabled={disabled || isLoading}
+      data-testid={dataTestId} // Apply the destructured data-testid attribute here
       {...props}
     >
       {isLoading ? (

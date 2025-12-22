@@ -3,7 +3,7 @@ import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import MyNotes from './MyNotes';
 import * as offlineStorage from '../services/offlineStorage';
 import * as api from '../services/api';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 import type { Note } from '../types';
 
 // ---- Typed mocks ----
@@ -178,7 +178,7 @@ describe('MyNotes Page', () => {
     fireEvent.mouseDown(touchTarget);
 
     // Simulate the 500ms long-press threshold
-    jest.advanceTimersByTime(600);
+    jest.advanceTimersByTime(500);
 
     fireEvent.mouseUp(touchTarget);
 

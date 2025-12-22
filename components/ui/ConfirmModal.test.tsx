@@ -1,57 +1,75 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, test, jest } from '@jest/globals';
+import '@testing-library/jest-dom';
 import ConfirmModal from './ConfirmModal';
+import { X } from 'lucide-react';
 
-describe('ConfirmModal Component', () => {
+// Define a minimal required props object for reuse across tests
+const minProps = {
+  title: 'Required Title',
+  message: 'Required Message Body',
+  primaryAction: {
+    label: 'Proceed',
+    handler: jest.fn(),
+    variant: 'primary' as const,
+  },
+  onClose: jest.fn(),
+};
+
+describe('ConfirmModal Component (Generic)', () => {
+  // --- Test 1: Visibility ---
   test('does not render when isOpen is false', () => {
     render(
-        <ConfirmModal isOpen={false} onClose={() => {}} onConfirm={() => {}} />
+      <ConfirmModal isOpen={false} {...minProps} />
     );
 
-    // Default title should not exist when closed
-    const defaultTitle = screen.queryByText('Discard Changes?');
-    expect(defaultTitle).toBeNull();
+    // Checks that the element is NOT in the document
+    expect(screen.queryByText(minProps.title)).not.toBeInTheDocument();
   });
 
-  test('renders default title, message and confirm label when open with no overrides', () => {
+  // --- Test 2: Basic Content Rendering ---
+  test('renders provided title, message, and primary label when open', () => {
     render(
-        <ConfirmModal isOpen={true} onClose={() => {}} onConfirm={() => {}} />
+      <ConfirmModal isOpen={true} {...minProps} />
     );
 
-    expect(screen.getByText('Discard Changes?')).toBeTruthy();
-    expect(
-        screen.getByText(
-            'You have unsaved changes. Are you sure you want to discard them?'
-        )
-    ).toBeTruthy();
+    // Checks that the elements ARE in the document
+    expect(screen.getByText(minProps.title)).toBeInTheDocument();
+    expect(screen.getByText(minProps.message)).toBeInTheDocument();
 
-    const confirmBtn = screen.getByRole('button', { name: 'Discard' });
-    expect(confirmBtn).toBeTruthy();
+    const primaryBtn = screen.getByRole('button', { name: minProps.primaryAction.label });
+    expect(primaryBtn).toBeInTheDocument();
   });
 
-  test('renders custom title and message when provided', () => {
+  // --- Test 3: Primary Action Execution ---
+  test('calls primaryAction handler when primary button is clicked', () => {
+    const handleConfirm = jest.fn();
     render(
-        <ConfirmModal
-            isOpen={true}
-            onClose={() => {}}
-            onConfirm={() => {}}
-            title="Test Title"
-            message="Test Message"
-        />
+      <ConfirmModal
+        isOpen={true}
+        {...minProps}
+        primaryAction={{
+          label: 'Execute',
+          handler: handleConfirm,
+          variant: 'danger',
+        }}
+      />
     );
 
-    expect(screen.getByText('Test Title')).toBeTruthy();
-    expect(screen.getByText('Test Message')).toBeTruthy();
+    const confirmBtn = screen.getByRole('button', { name: 'Execute' });
+    fireEvent.click(confirmBtn);
+
+    expect(handleConfirm).toHaveBeenCalledTimes(1);
   });
 
-  test('calls onClose when Cancel is clicked', () => {
+  // --- Test 4: Default Secondary Action (Cancel) Execution ---
+  test('renders "Cancel" button and calls onClose when clicked (default secondary action)', () => {
     const handleClose = jest.fn();
     render(
-        <ConfirmModal
-            isOpen={true}
-            onClose={handleClose}
-            onConfirm={() => {}}
-        />
+      <ConfirmModal
+        isOpen={true}
+        {...minProps}
+        onClose={handleClose}
+      />
     );
 
     const cancelBtn = screen.getByRole('button', { name: 'Cancel' });
@@ -60,56 +78,43 @@ describe('ConfirmModal Component', () => {
     expect(handleClose).toHaveBeenCalledTimes(1);
   });
 
-  test('calls onConfirm when confirm button is clicked', () => {
-    const handleConfirm = jest.fn();
+  // --- Test 5: Custom Primary Label and Variant (Danger) ---
+  test('renders custom primary label and applies danger variant styles', () => {
     render(
-        <ConfirmModal
-            isOpen={true}
-            onClose={() => {}}
-            onConfirm={handleConfirm}
-            confirmLabel="Yes, Do it"
-        />
-    );
-
-    const confirmBtn = screen.getByRole('button', { name: 'Yes, Do it' });
-    fireEvent.click(confirmBtn);
-
-    expect(handleConfirm).toHaveBeenCalledTimes(1);
-  });
-
-  test('applies danger variant styles to confirm button when confirmVariant="danger"', () => {
-    render(
-        <ConfirmModal
-            isOpen={true}
-            onClose={() => {}}
-            onConfirm={() => {}}
-            confirmLabel="Danger Action"
-            confirmVariant="danger"
-        />
+      <ConfirmModal
+        isOpen={true}
+        {...minProps}
+        primaryAction={{
+          ...minProps.primaryAction,
+          label: 'Danger Action',
+          variant: 'danger'
+        }}
+      />
     );
 
     const dangerBtn = screen.getByRole('button', { name: 'Danger Action' });
 
-    // Danger variant in Button.tsx contains these classes:
-    // "hover:bg-red-50 hover:border-red-300 hover:text-red-700 ..."
-    expect(dangerBtn.className).toContain('hover:bg-red-50');
-    expect(dangerBtn.className).toContain('hover:text-red-700');
+    // Checks that the button element HAS the expected class
+    expect(dangerBtn).toHaveClass('hover:text-red-700');
   });
 
-  test('applies primary variant styles when confirmVariant="primary"', () => {
+// --- Test 6: Custom Icon Rendering (Corrected) ---
+  test('renders custom icon and respects icon color class', () => {
     render(
-        <ConfirmModal
-            isOpen={true}
-            onClose={() => {}}
-            onConfirm={() => {}}
-            confirmLabel="Primary Action"
-            confirmVariant="primary"
-        />
+      <ConfirmModal
+        isOpen={true}
+        {...minProps}
+        icon={X} // Using X icon from lucide-react
+        iconColorClass="text-green-500"
+      />
     );
 
-    const primaryBtn = screen.getByRole('button', { name: 'Primary Action' });
+    // Find the H3 element containing the title text, and then grab its parent.
+    // In the component, the parent is the div containing the icon and the title, which receives the iconColorClass.
+    const headerDiv = screen.getByText(minProps.title).parentElement;
 
-    // Primary variant in Button.tsx contains "bg-brand-primary"
-    expect(primaryBtn.className).toContain('bg-brand-primary');
+    // Assert that the parent element was found and has the correct class
+    expect(headerDiv).toBeInTheDocument(); // Added safety check
+    expect(headerDiv).toHaveClass('text-green-500');
   });
 });

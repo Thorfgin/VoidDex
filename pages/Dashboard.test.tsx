@@ -5,7 +5,7 @@ import Dashboard from './Dashboard';
 import * as api from '../services/api';
 // @ts-ignore
 import * as offlineStorage from '../services/offlineStorage';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 
 jest.mock('../services/api', () => ({
   searchGlobal: jest.fn(),

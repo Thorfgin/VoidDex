@@ -5,7 +5,7 @@ import RechargeItem from './RechargeItem';
 import * as api from '../services/api';
 // @ts-ignore – module is mocked below
 import * as offlineStorage from '../services/offlineStorage';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 
 jest.mock('../services/api', () => ({
   searchItemByItin: jest.fn(),

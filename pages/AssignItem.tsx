@@ -13,10 +13,22 @@ import {
   AlertTriangle,
   ArrowLeft,
   Save,
-  FileText
+  FileText,
+  LucideIcon // Import LucideIcon type
 } from 'lucide-react';
 import Page from '../components/layout/Page';
 import Panel from '../components/layout/Panel';
+
+// Define ModalConfig type (Moved from CreateItem/RechargeItem, assumed to be a local type or shared via context)
+type ModalConfig = {
+  isOpen: boolean;
+  title: string;
+  message: React.ReactNode;
+  primaryAction: React.ComponentProps<typeof ConfirmModal>['primaryAction'];
+  secondaryAction?: React.ComponentProps<typeof ConfirmModal>['secondaryAction'];
+  icon?: LucideIcon;
+  iconColorClass?: string;
+}
 
 const AssignItem: React.FC = () => {
   const navigate = useNavigate();
@@ -38,21 +50,13 @@ const AssignItem: React.FC = () => {
   // Logic to handle safe unassignment (requires 2 clicks)
   const [confirmUnassign, setConfirmUnassign] = useState(false);
 
-  // Modal control
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState("Discard Changes?");
-  const [confirmMessage, setConfirmMessage] = useState("You have unsaved changes. Are you sure you want to discard them?");
-  const [confirmLabel, setConfirmLabel] = useState("Discard");
-  const [confirmVariant, setConfirmVariant] = useState<'primary' | 'danger'>("danger");
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  // UPDATED: Modal control consolidated into modalConfig
+  const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
+  const closeModal = () => setModalConfig(null);
   const [draftId, setDraftId] = useState<string | null>(() => location.state?.draftId || null);
   const [draftTimestamp, setDraftTimestamp] = useState<number | null>(() => location.state?.draftTimestamp || null);
-
-  // Baseline for navigation warning (matches last saved or loaded state)
   const [baselineOwner, setBaselineOwner] = useState('');
-
   const isSuccess = statusMessage?.type === 'success';
-  const isDirtyDB = item !== null && item.owner !== owner && !isSuccess;
   const isUnsaved = item !== null && owner !== baselineOwner && !isSuccess;
 
   // Resolved name for the input display
@@ -68,14 +72,24 @@ const AssignItem: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isUnsaved]);
 
+  // UPDATED: Use modalConfig for confirmation
   const confirmAction = (action: () => void) => {
     if (isUnsaved) {
-      setConfirmTitle("Discard Changes?");
-      setConfirmMessage("You have unsaved changes. Are you sure you want to discard them?");
-      setConfirmLabel("Discard");
-      setConfirmVariant("danger");
-      setPendingAction(() => action);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Discard Changes?",
+        message: "You have unsaved changes. Are you sure you want to discard them?",
+        primaryAction: {
+          label: "Discard",
+          handler: () => {
+            action();
+            closeModal();
+          },
+          variant: "danger",
+        },
+        icon: AlertTriangle,
+        iconColorClass: "text-amber-600 dark:text-amber-500",
+      });
     } else {
       action();
     }
@@ -112,7 +126,8 @@ const AssignItem: React.FC = () => {
     setConfirmUnassign(false);
     setDraftId(null);
     setDraftTimestamp(null);
-    navigate(location.pathname, {replace: true, state: {}});
+    // Use confirmAction wrapper to check for unsaved draft changes before resetting
+    confirmAction(() => navigate(location.pathname, {replace: true, state: {}}));
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -131,13 +146,26 @@ const AssignItem: React.FC = () => {
         setOwner(result.data.owner);
         setBaselineOwner(result.data.owner);
       } else {
-        setSearchError('Not found');
+        setSearchError('Item not found.'); // Improved error message
       }
     } catch (err) {
-      setSearchError('Error');
+      setSearchError('An error occurred during search.'); // Improved error message
     } finally {
       setIsSearching(false);
     }
+  };
+
+  // --- Utility Functions (PLIN formatting moved here or imported, based on standard) ---
+  const formatPLIN = (val: string) => {
+    const clean = val.replace(/[^0-9#]/g, '');
+    if (clean.includes('#')) {
+      const parts = clean.split('#');
+      return `${parts[0].slice(0, 4)}#${parts.slice(1).join('').slice(0, 2)}`;
+    }
+    if (clean.length > 4) {
+      return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
+    }
+    return clean;
   };
 
   const handleSaveDraft = () => {
@@ -155,23 +183,11 @@ const AssignItem: React.FC = () => {
     });
     setDraftId(id);
     setDraftTimestamp(now);
-    setBaselineOwner(owner);
+    setBaselineOwner(owner); // Update baseline to the draft state
     setStatusMessage({type: 'success', text: 'Draft saved successfully.'});
     setTimeout(() => {
       setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
     }, 3000);
-  };
-
-  const formatPLIN = (val: string) => {
-    const clean = val.replace(/[^0-9#]/g, '');
-    if (clean.includes('#')) {
-      const parts = clean.split('#');
-      return `${parts[0].slice(0, 4)}#${parts.slice(1).join('').slice(0, 2)}`;
-    }
-    if (clean.length > 4) {
-      return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
-    }
-    return clean;
   };
 
   const handleOwnerChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -183,40 +199,47 @@ const AssignItem: React.FC = () => {
     if (!item) return;
 
     if (owner.trim().length > 0 && !/^\d{1,4}#\d{1,2}$/.test(owner)) {
-      setStatusMessage({type: 'error', text: 'Player PLIN must be format 1234#12 or 12#1'});
+      setStatusMessage({type: 'error', text: 'Player PLIN must be format 1234#12'});
       return;
     }
 
     setIsUpdating(true);
     setConfirmUnassign(false);
+    setStatusMessage(null); // Clear status message before update
+
     try {
       const oldOwner = item.owner;
+      // We pass the new owner value
       const result = await updateItem(item.itin, {owner});
+
       if (result.success) {
         if (draftId) {
           deleteStoredChange(draftId);
           setDraftId(null);
           setDraftTimestamp(null);
         }
+
+        // Construct a detailed success message
         let msg;
-        if (oldOwner && !owner) {
-          msg = `Unassigned ${oldOwner}`;
-        } else if (!oldOwner && owner) {
-          msg = `Assigned ${owner}`;
-        } else if (oldOwner && owner && oldOwner !== owner) {
-          msg = `Unassigned ${oldOwner}, Assigned ${owner}`;
+        if (!oldOwner && owner) {
+          msg = `Assigned to ${owner}.`;
+        } else if (oldOwner && !owner) {
+          msg = `Successfully Unassigned from ${oldOwner}.`;
+        } else if (oldOwner !== owner) {
+          msg = `Reassigned from ${oldOwner} to ${owner}.`;
         } else {
-          msg = `Assignment updated to ${owner}`;
+          msg = `Assignment confirmed for ${owner}.`;
         }
 
         setStatusMessage({type: 'success', text: msg});
+        // Update item in state with a new owner
         setItem({...item, owner});
         setBaselineOwner(owner);
       } else {
-        setStatusMessage({type: 'error', text: 'Failed.'});
+        setStatusMessage({type: 'error', text: 'Update Failed: ' + result.error});
       }
     } catch (err) {
-      setStatusMessage({type: 'error', text: 'Error'});
+      setStatusMessage({type: 'error', text: 'An unexpected error occurred during item update.'});
     } finally {
       setIsUpdating(false);
     }
@@ -225,27 +248,43 @@ const AssignItem: React.FC = () => {
   const handleUpdate = () => {
     if (!item) return;
 
+    // Check 1: If the user cleared the owner field, trigger unassign confirmation
     if (owner.trim().length === 0 && !confirmUnassign) {
       setConfirmUnassign(true);
       return;
     }
 
+    // Check 2: If we have a draft ID, confirm proceeding with the draft's state
     if (draftId) {
-      setConfirmTitle("Process Draft?");
-      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-      setConfirmLabel("Process");
-      setConfirmVariant("primary");
-      setPendingAction(() => executeUpdate);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Process Draft?",
+        message: "The object may have been changed since this draft was stored. Proceed with the draft assignment?",
+        primaryAction: {
+          label: "Process Draft",
+          handler: () => {
+            executeUpdate().then();
+            closeModal();
+          },
+          variant: "primary",
+        },
+        secondaryAction: {
+          label: "Cancel",
+          handler: closeModal,
+        },
+        icon: AlertTriangle,
+        iconColorClass: "text-blue-600 dark:text-blue-500",
+      });
       return;
     }
 
+    // Check 3: If confirmUnassign flag is set, or if it's a normal assignment, execute update directly.
     executeUpdate().then();
   };
 
   const getDisplayValue = () => {
-    if (isSuccess && characterName) {
-      return `${owner} ${characterName}`;
+    if (characterName) {
+      return `${owner} (${characterName})`;
     }
     return owner;
   }
@@ -262,25 +301,25 @@ const AssignItem: React.FC = () => {
     ) : null
   );
 
-  const title = 'Assign Item'; // Changed to camelCase
+  const title = 'Assign Item';
 
   // --- Render (Wrapped in Page and Panel) ---
   return (
     <Page maxWidth="lg">
 
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        title={confirmTitle}
-        message={confirmMessage}
-        confirmLabel={confirmLabel}
-        confirmVariant={confirmVariant}
-        onConfirm={() => {
-          if (pendingAction) pendingAction();
-          setShowConfirm(false);
-          setPendingAction(null);
-        }}
-      />
+      {/* UPDATED: Generic Modal Rendering */}
+      {modalConfig && (
+        <ConfirmModal
+          isOpen={modalConfig.isOpen}
+          onClose={closeModal}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          primaryAction={modalConfig.primaryAction}
+          secondaryAction={modalConfig.secondaryAction}
+          icon={modalConfig.icon}
+          iconColorClass={modalConfig.iconColorClass}
+        />
+      )}
 
       {/* External Button Bar */}
       <div className="mb-3 flex flex-wrap items-center justify-start gap-2">
@@ -340,7 +379,7 @@ const AssignItem: React.FC = () => {
                 <div
                   className="p-2 bg-yellow-50 border border-yellow-300 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-300 rounded flex items-center gap-2 text-sm">
                   <AlertTriangle size={16}/>
-                  <span>Are you sure you want to remove the player? Please confirm.</span>
+                  <span>Are you sure you want to remove the player? **Click Assign/Unassign again to confirm.**</span>
                 </div>
               )}
               {statusMessage && (
@@ -366,11 +405,6 @@ const AssignItem: React.FC = () => {
                     placeholder="1234#12"
                     multiline={isSuccess}
                   />
-                  {!isSuccess && characterName && (
-                    <div className="-mt-3 mb-3 ml-1 text-xs font-bold text-blue-600 dark:text-blue-400">
-                      {characterName}
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -381,7 +415,7 @@ const AssignItem: React.FC = () => {
 
               {!isSuccess && (
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                  <Button variant="secondary" type="button" onClick={handleSaveDraft}>
+                  <Button variant="secondary" type="button" onClick={handleSaveDraft} disabled={!isUnsaved}>
                     <FileText size={16} className="mr-2"/> Save Draft
                   </Button>
                   <Button
@@ -389,10 +423,10 @@ const AssignItem: React.FC = () => {
                     onClick={handleUpdate}
                     isLoading={isUpdating}
                     variant={confirmUnassign ? 'danger' : 'primary'}
-                    disabled={!isDirtyDB && !confirmUnassign}
+                    disabled={!isUnsaved && !confirmUnassign}
                   >
                     <Save size={16} className="mr-2"/>
-                    {confirmUnassign ? 'Confirm Unassign' : (owner ? 'Assign' : 'Unassign')}
+                    {confirmUnassign ? 'Confirm Unassign' : (owner.trim() ? 'Assign' : 'Unassign')}
                   </Button>
                 </div>
               )}

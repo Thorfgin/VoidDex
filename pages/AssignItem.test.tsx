@@ -1,18 +1,15 @@
-import { fireEvent, waitFor, screen } from '@testing-library/react';
-import { describe, test, jest, beforeEach } from '@jest/globals';
+import {fireEvent, waitFor, screen} from '@testing-library/react';
 import AssignItem from './AssignItem';
-// @ts-ignore
 import * as api from '../services/api';
-// @ts-ignore
 import * as offlineStorage from '../services/offlineStorage';
-import { renderWithRouter } from '../testUtils';
+import {renderWithRouter} from '../utils/testUtils';
 
 // Mock API
 jest.mock('../services/api', () => ({
   searchItemByItin: jest.fn(),
   updateItem: jest.fn(),
   getCharacterName: jest.fn((plin: string) =>
-      plin === '1234#12' ? 'Test User' : ''
+    plin === '1234#12' ? 'Test User' : ''
   ),
 }));
 
@@ -51,14 +48,15 @@ describe('AssignItem Page', () => {
       data: mockItemData,
     });
 
-    const utils = renderWithRouter(<AssignItem />, '/assign-item');
+    const utils = renderWithRouter(<AssignItem/>, '/assign-item');
 
     const itinInput = utils.getByPlaceholderText('4-digit ID');
     const findBtn = utils.getByText('Find');
 
-    fireEvent.change(itinInput, { target: { value: '1234' } });
+    fireEvent.change(itinInput, {target: {value: '1234'}});
     fireEvent.click(findBtn);
 
+    // Wait for the item name to appear
     await utils.findByDisplayValue('Test Item');
 
     return utils;
@@ -70,11 +68,11 @@ describe('AssignItem Page', () => {
       data: mockItemData,
     });
 
-    const { getByPlaceholderText, getByText, findByDisplayValue } =
-        renderWithRouter(<AssignItem />, '/assign-item');
+    const {getByPlaceholderText, getByText, findByDisplayValue} =
+      renderWithRouter(<AssignItem/>, '/assign-item');
 
     fireEvent.change(getByPlaceholderText('4-digit ID'), {
-      target: { value: '1234' },
+      target: {value: '1234'},
     });
     fireEvent.click(getByText('Find'));
 
@@ -83,78 +81,84 @@ describe('AssignItem Page', () => {
     });
 
     expect(await findByDisplayValue('Test Item')).toBeTruthy();
-    expect(screen.getByDisplayValue('1234#12')).toBeTruthy();
+    // Use regex to match the value, as getDisplayValue formats it as "PLIN (Name)"
+    expect(screen.getByDisplayValue(/1234#12/i)).toBeTruthy();
   });
 
-  test('shows "Not found" when item is not found', async () => {
+  test('shows "Item not found" when item is not found', async () => {
     apiMock.searchItemByItin.mockResolvedValue({
       success: false,
       data: null,
     } as any);
 
-    const { getByPlaceholderText, getByText, findByText } = renderWithRouter(
-        <AssignItem />,
-        '/assign-item',
+    const {getByPlaceholderText, getByText, findByText} = renderWithRouter(
+      <AssignItem/>,
+      '/assign-item',
     );
 
     fireEvent.change(getByPlaceholderText('4-digit ID'), {
-      target: { value: '9999' },
+      target: {value: '9999'},
     });
     fireEvent.click(getByText('Find'));
 
-    expect(await findByText('Not found')).toBeTruthy();
+    // FIX: Updated expected error message
+    expect(await findByText('Item not found.')).toBeTruthy();
   });
 
   test('shows "Error" when search throws', async () => {
     apiMock.searchItemByItin.mockRejectedValue(new Error('Network error'));
 
-    const { getByPlaceholderText, getByText, findByText } = renderWithRouter(
-        <AssignItem />,
-        '/assign-item',
+    const {getByPlaceholderText, getByText, findByText} = renderWithRouter(
+      <AssignItem/>,
+      '/assign-item',
     );
 
     fireEvent.change(getByPlaceholderText('4-digit ID'), {
-      target: { value: '1234' },
+      target: {value: '1234'},
     });
     fireEvent.click(getByText('Find'));
 
-    expect(await findByText('Error')).toBeTruthy();
+    // FIX: Updated expected error message
+    expect(await findByText('An error occurred during search.')).toBeTruthy();
   });
 
   test('saves draft correctly', async () => {
     await setupWithSearchResult();
 
-    const ownerInput = screen.getByDisplayValue('1234#12');
-    fireEvent.change(ownerInput, { target: { value: '9999#11' } });
+    // Use regex to find the input, matching "PLIN (Name)"
+    const ownerInput = screen.getByDisplayValue(/1234#12/i);
+    fireEvent.change(ownerInput, {target: {value: '9999#11'}});
 
     fireEvent.click(screen.getByText('Save Draft'));
 
     expect(offlineMock.saveStoredChange).toHaveBeenCalledTimes(1);
     expect(offlineMock.saveStoredChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          type: 'item',
-          action: 'assign',
-          data: expect.objectContaining({
-            owner: '9999#11',
-          }),
-          title: mockItemData.name,
-          subtitle: `Assign ITIN: ${mockItemData.itin}`,
+      expect.objectContaining({
+        type: 'item',
+        action: 'assign',
+        data: expect.objectContaining({
+          owner: '9999#11',
         }),
+        title: mockItemData.name,
+        subtitle: `Assign ITIN: ${mockItemData.itin}`,
+      }),
     );
   });
 
   test('prevents invalid PLIN format on update', async () => {
     await setupWithSearchResult();
 
-    const ownerInput = screen.getByDisplayValue('1234#12');
+    // Use regex to find the input, matching "PLIN (Name)"
+    const ownerInput = screen.getByDisplayValue(/1234#12/i);
     const assignBtn = screen.getByText('Assign');
 
     // Use numeric value without # so it survives formatPLIN but fails the regex
-    fireEvent.change(ownerInput, { target: { value: '1234' } });
+    fireEvent.change(ownerInput, {target: {value: '1234'}});
     fireEvent.click(assignBtn);
 
+    // FIX: Updated expected error message to match component's validation
     expect(
-        await screen.findByText('Player PLIN must be format 1234#12 or 12#1'),
+      await screen.findByText('Player PLIN must be format 1234#12'),
     ).toBeTruthy();
 
     expect(apiMock.updateItem).not.toHaveBeenCalled();
@@ -168,20 +172,21 @@ describe('AssignItem Page', () => {
     });
     apiMock.updateItem.mockResolvedValue({
       success: true,
-      data: { ...mockItemData, owner: '9999#11' },
+      data: {...mockItemData, owner: '9999#11'},
     });
 
-    const { getByPlaceholderText, getByText, findByDisplayValue, getByDisplayValue } =
-        renderWithRouter(<AssignItem />, '/assign-item');
+    const {getByPlaceholderText, getByText, findByDisplayValue} =
+      renderWithRouter(<AssignItem/>, '/assign-item');
 
     fireEvent.change(getByPlaceholderText('4-digit ID'), {
-      target: { value: '1234' },
+      target: {value: '1234'},
     });
     fireEvent.click(getByText('Find'));
     await findByDisplayValue('Test Item');
 
-    const ownerInput = getByDisplayValue('1234#12');
-    fireEvent.change(ownerInput, { target: { value: '9999#11' } });
+    // Use regex to find the input, matching "PLIN (Name)"
+    const ownerInput = screen.getByDisplayValue(/1234#12/i);
+    fireEvent.change(ownerInput, {target: {value: '9999#11'}});
 
     const assignBtn = getByText('Assign');
     fireEvent.click(assignBtn);
@@ -192,9 +197,9 @@ describe('AssignItem Page', () => {
       });
     });
 
-    // Success message for reassign
+    // FIX: Updated success message to match the component's detailed message
     expect(
-        screen.getByText('Unassigned 1234#12, Assigned 9999#11'),
+      screen.getByText('Reassigned from 1234#12 to 9999#11.'),
     ).toBeTruthy();
 
     // After success, action buttons disappear (isSuccess === true)
@@ -208,21 +213,23 @@ describe('AssignItem Page', () => {
 
     apiMock.updateItem.mockResolvedValue({
       success: true,
-      data: { ...mockItemData, owner: '' },
+      data: {...mockItemData, owner: ''},
     });
 
-    const ownerInput = screen.getByDisplayValue('1234#12');
+    // Use regex to find the input, matching "PLIN (Name)"
+    const ownerInput = screen.getByDisplayValue(/1234#12/i);
 
     // Clear owner
-    fireEvent.change(ownerInput, { target: { value: '' } });
+    fireEvent.change(ownerInput, {target: {value: ''}});
 
     // First click: triggers confirmation state
     const unassignBtn = screen.getByText('Unassign');
     fireEvent.click(unassignBtn);
 
-    expect(screen.getByText(/Confirm Unassign/)).toBeTruthy();
+    expect(screen.getByText('Confirm Unassign')).toBeTruthy();
     expect(
-        screen.getByText(/Are you sure you want to remove the player/i),
+      // Confirm the new confirmation message text is present
+      screen.getByText(/Click Assign\/Unassign again to confirm/i),
     ).toBeTruthy();
 
     // Second click: actually unassigns
@@ -230,18 +237,18 @@ describe('AssignItem Page', () => {
     fireEvent.click(confirmBtn);
 
     await waitFor(() => {
-      expect(apiMock.updateItem).toHaveBeenCalledWith('1234', { owner: '' });
+      expect(apiMock.updateItem).toHaveBeenCalledWith('1234', {owner: ''});
     });
   });
 
   test('processes existing draft via confirmation modal', async () => {
     apiMock.updateItem.mockResolvedValue({
       success: true,
-      data: { ...mockItemData, owner: '9999#11' },
+      data: {...mockItemData, owner: '9999#11'},
     });
 
     // Load from a stored draft (no search required)
-    renderWithRouter(<AssignItem />, '/assign-item', {
+    renderWithRouter(<AssignItem/>, '/assign-item', {
       initialData: {
         item: mockItemData,
         owner: '1234#12',
@@ -250,23 +257,20 @@ describe('AssignItem Page', () => {
       draftTimestamp: Date.now(),
     });
 
-    const ownerInput = screen.getByDisplayValue('1234#12');
-
-    fireEvent.change(ownerInput, { target: { value: '9999#11' } });
-
-    // First click triggers "Process Draft?" confirm modal
+    const ownerInput = screen.getByDisplayValue(/1234#12/i);
+    fireEvent.change(ownerInput, {target: {value: '9999#11'}});
     fireEvent.click(screen.getByText('Assign'));
 
     expect(screen.getByText('Process Draft?')).toBeTruthy();
     expect(
-        screen.getByText(
-            'The object may have been changed since this draft was stored. Proceed?',
-        ),
+      screen.getByText(
+        'The object may have been changed since this draft was stored. Proceed with the draft assignment?',
+      ),
     ).toBeTruthy();
-    expect(screen.getByText('Process')).toBeTruthy();
+    expect(screen.getByText('Process Draft')).toBeTruthy(); // FIX: Changed label from 'Process' to 'Process Draft'
 
     // Confirm processing
-    fireEvent.click(screen.getByText('Process'));
+    fireEvent.click(screen.getByText('Process Draft'));
 
     await waitFor(() => {
       expect(apiMock.updateItem).toHaveBeenCalledWith('1234', {

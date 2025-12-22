@@ -1,11 +1,8 @@
 import { fireEvent, waitFor, screen } from '@testing-library/react';
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import CreateItem from './CreateItem';
-// @ts-ignore
 import * as api from '../services/api';
-// @ts-ignore
 import * as offlineStorage from '../services/offlineStorage';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 
 jest.mock('../services/api', () => ({
   createItem: jest.fn(),
@@ -124,7 +121,7 @@ describe('CreateItem Page', () => {
         }),
     );
 
-    // Assign navigates with the item in state
+    // Assign and navigates to the item in state
     fireEvent.click(assignBtn);
     expect(mockNavigate).toHaveBeenCalledWith(
         '/assign-item',
@@ -190,7 +187,7 @@ describe('CreateItem Page', () => {
 
     fireEvent.submit(form);
     expect(
-        await findByText('Player must be format 1234#12 or 12#1'),
+        await findByText('Player must be format 1234#12'),
     ).toBeTruthy();
     expect(apiMock.createItem).not.toHaveBeenCalled();
 
@@ -202,7 +199,7 @@ describe('CreateItem Page', () => {
 
     fireEvent.submit(form);
     expect(
-        await findByText('Expiry Date must be DD/MM/YYYY'),
+      await findByText('Expiry Date must be DD/MM/YYYY.'),
     ).toBeTruthy();
     expect(apiMock.createItem).not.toHaveBeenCalled();
 

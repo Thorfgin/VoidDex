@@ -4,7 +4,7 @@ import { fireEvent, waitFor, screen } from '@testing-library/react';
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import StoredChanges from './StoredChanges';
 import * as offlineStorage from '../services/offlineStorage';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 
 // --- Mocks ---
 

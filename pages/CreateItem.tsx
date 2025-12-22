@@ -8,8 +8,31 @@ import ConfirmModal from '../components/ui/ConfirmModal';
 import UserPlusMinus from '../components/icons/UserPlusMinus';
 import {createItem, getCharacterName} from '../services/api';
 import {saveStoredChange, deleteStoredChange} from '../services/offlineStorage';
-import {Home, FilePlus, PlusSquare, BatteryCharging, ArrowLeft, Save, FileText} from 'lucide-react';
+import {
+  Home,
+  FilePlus,
+  PlusSquare,
+  BatteryCharging,
+  ArrowLeft,
+  Save,
+  FileText,
+  AlertTriangle,
+  LucideIcon
+} from 'lucide-react';
 import {Item} from '../types';
+import {formatDate, getDefaultExpiry} from "../utils/dateUtils";
+import {formatPLIN} from "../utils/playerUtils";
+
+// Define ModalConfig type
+type ModalConfig = {
+  isOpen: boolean;
+  title: string;
+  message: React.ReactNode;
+  primaryAction: React.ComponentProps<typeof ConfirmModal>['primaryAction'];
+  secondaryAction?: React.ComponentProps<typeof ConfirmModal>['secondaryAction'];
+  icon?: LucideIcon;
+  iconColorClass?: string;
+}
 
 const CreateItem: React.FC = () => {
   const navigate = useNavigate();
@@ -22,24 +45,12 @@ const CreateItem: React.FC = () => {
   const [isViewMode, setIsViewMode] = useState(false);
   const [viewItin, setViewItin] = useState('');
 
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
   const [draftId, setDraftId] = useState<string | null>(() => location.state?.draftId || null);
   const [draftTimestamp, setDraftTimestamp] = useState<number | null>(() => location.state?.draftTimestamp || null);
 
   const returnQuery = location.state?.returnQuery;
   const returnTo = location.state?.returnTo;
-
-  const getDefaultExpiry = () => {
-    const date = new Date();
-    date.setDate(1);
-    date.setMonth(date.getMonth() + 1);
-    date.setFullYear(date.getFullYear() + 1);
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -54,7 +65,10 @@ const CreateItem: React.FC = () => {
   const characterName = getCharacterName(formData.owner);
   const isDirty = !isReadOnly && !isViewMode && JSON.stringify(formData) !== JSON.stringify(initialState);
 
-  // --- Effects and Handlers (Unchanged Logic) ---
+  // NEW: Function to close the modal
+  const closeModal = () => setModalConfig(null);
+
+  // --- Effects and Handlers ---
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -66,10 +80,24 @@ const CreateItem: React.FC = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
+  // UPDATED: Use modalConfig for confirmation
   const confirmAction = (action: () => void) => {
     if (isDirty) {
-      setPendingAction(() => action);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Discard Changes?",
+        message: "You have unsaved changes. Are you sure you want to discard them?",
+        primaryAction: {
+          label: "Discard",
+          handler: () => {
+            action();
+            closeModal();
+          },
+          variant: "danger",
+        },
+        icon: AlertTriangle,
+        iconColorClass: "text-amber-600 dark:text-amber-500",
+      });
     } else {
       action();
     }
@@ -147,51 +175,14 @@ const CreateItem: React.FC = () => {
       remarks: formData.remarks,
       csRemarks: formData.csRemarks
     };
-    navigate(path, {
-      state: {
-        item: currentItem,
-        returnQuery: returnQuery
-      }
+    confirmAction(() => { // Added confirmAction wrapper
+      navigate(path, {
+        state: {
+          item: currentItem,
+          returnQuery: returnQuery
+        }
+      });
     });
-  };
-
-  const formatPLIN = (val: string) => {
-    const clean = val.replace(/[^0-9#]/g, '');
-    if (clean.includes('#')) {
-      const parts = clean.split('#');
-      return `${parts[0].slice(0, 4)}#${parts.slice(1).join('').slice(0, 2)}`;
-    }
-    if (clean.length > 4) {
-      return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
-    }
-    return clean;
-  };
-
-  const formatDate = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    let day = clean.slice(0, 2);
-    let month = clean.slice(2, 4);
-    let year = clean.slice(4, 8);
-
-    if (day.length === 2) {
-      let d = parseInt(day, 10);
-      if (d > 31) d = 31;
-      if (d < 1) d = 1;
-      day = d.toString().padStart(2, '0');
-    }
-    if (month.length === 2) {
-      let m = parseInt(month, 10);
-      if (m > 12) m = 12;
-      if (m < 1) m = 1;
-      month = m.toString().padStart(2, '0');
-    }
-    if (year.length === 4) {
-      let y = parseInt(year, 10);
-      if (y > 2100) y = 2100;
-      if (y < 1980) y = 1980;
-      year = y.toString();
-    }
-    return day + (clean.length >= 3 ? `/${month}` : '') + (clean.length >= 5 ? `/${year}` : '');
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -235,11 +226,18 @@ const CreateItem: React.FC = () => {
     const {name, description, owner, expiryDate} = formData;
     if (!name.trim()) return "Name is required.";
     if (!description.trim()) return "Description is required.";
-    if (!/^\d{1,4}#\d{1,2}$/.test(owner)) return "Player must be format 1234#12 or 12#1";
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) return "Expiry Date must be DD/MM/YYYY";
+    // Updated PLIN validation message for consistency
+    if (!/^\d{1,4}#\d{1,2}$/.test(owner)) return "Player must be format 1234#12";
+
+    // Check if expiry date is required and valid
+    if (!expiryDate.trim()) return "Expiry Date is required and must be DD/MM/YYYY.";
+
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) return "Expiry Date must be DD/MM/YYYY.";
 
     const [d, m, y] = expiryDate.split('/').map(Number);
     if (y < 1980 || y > 2100) return 'Year must be between 1980 and 2100';
+
+    // Validate calendar date integrity
     const date = new Date(y, m - 1, d);
     if (date.getFullYear() !== y || date.getMonth() + 1 !== m || date.getDate() !== d) {
       return "Invalid calendar date";
@@ -267,17 +265,19 @@ const CreateItem: React.FC = () => {
         csRemarks: formData.csRemarks
       });
 
-      if (result.success) {
+      if (result.success && result.data?.itin) { // Ensure data and itin exist
         if (draftId) {
           deleteStoredChange(draftId);
           setDraftId(null);
           setDraftTimestamp(null);
         }
-        setStatusMessage({type: 'success', text: `Item Created! ITIN: ${result.data?.itin}`});
+        setStatusMessage({type: 'success', text: `Item Created! ITIN: ${result.data.itin}`});
         setIsReadOnly(true);
         setInitialState(formData);
+        setViewItin(result.data.itin); // Set ITIN for view mode
+        setIsViewMode(true);
       } else {
-        setStatusMessage({type: 'error', text: 'Failed: ' + result.error});
+        setStatusMessage({type: 'error', text: 'Failed: ' + (result.error || 'No item ID returned.')});
       }
     } catch (err) {
       setStatusMessage({type: 'error', text: 'An unexpected error occurred.'});
@@ -287,21 +287,22 @@ const CreateItem: React.FC = () => {
   };
 
   // --- Render Props ---
-
   const ownerInput = (
-    <div>
+    <div className="mb-4 w-full">
       <Input
         label="Player (PLIN)"
         name="owner"
-        value={isViewMode && characterName ? `${formData.owner} ${characterName}` : formData.owner}
+        // Show PLIN and Character Name in View Mode, otherwise just PLIN
+        value={isViewMode && characterName ? `${formData.owner} (${characterName})` : formData.owner}
         onChange={handleChange}
         readOnly={isReadOnly}
         required={!isViewMode}
         placeholder="1234#12"
         multiline={isViewMode}
       />
+      {/* Show character name hint only in edit/create mode */}
       {!isViewMode && characterName && (
-        <div className="-mt-3 mb-3 ml-1 text-xs font-bold text-blue-600 dark:text-blue-400">
+        <div className="mt-1 text-xs font-bold text-blue-600 dark:text-blue-400">
           {characterName}
         </div>
       )}
@@ -323,24 +324,27 @@ const CreateItem: React.FC = () => {
   // Preparing Panel content
   const headerLeftContent = (<PlusSquare size={20} className="text-entity-item"/>);
   const headerRightContent = (draftId && draftTimestamp ? (
-    <span>
-        <span className="font-bold">(Draft)</span>
-      {new Date(draftTimestamp).toLocaleString()}
-      </span>) : null)
+    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+      <span className="font-bold">(Draft)</span>
+      {new Date(draftTimestamp).toLocaleDateString()}
+    </span>) : null) // Updated to toLocaleDateString() for consistency
 
   // --- Main Render Block ---
   return (
-    // 1. Use the new Page component
     <Page maxWidth="xl" className="landscape:w-9/12">
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        onConfirm={() => {
-          if (pendingAction) pendingAction();
-          setShowConfirm(false);
-          setPendingAction(null);
-        }}
-      />
+      {/* Generic Modal Rendering - UPDATED */}
+      {modalConfig && (
+        <ConfirmModal
+          isOpen={modalConfig.isOpen}
+          onClose={closeModal}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          primaryAction={modalConfig.primaryAction}
+          secondaryAction={modalConfig.secondaryAction}
+          icon={modalConfig.icon}
+          iconColorClass={modalConfig.iconColorClass}
+        />
+      )}
 
       {/* Top Button Bar - remains outside the Panel */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -376,99 +380,102 @@ const CreateItem: React.FC = () => {
         </div>
       </div>
 
-      {/* 2. Use the new Panel component */}
       <Panel
         title={isViewMode ? 'Item Properties' : 'Create Item'}
         headerLeftContent={headerLeftContent}
         headerRightContent={headerRightContent}
       >
-        {statusMessage && (
-          <div className={`mb-4 p-2 rounded border text-sm font-serif ${
-            statusMessage.type === 'success'
-              ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
-              : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-          }`}>
-            <p className="font-bold">{statusMessage.text}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-1">
-          {isViewMode ? (
-            <div className="flex gap-2">
-              <div className="w-20 shrink-0">
-                <Input label="ITIN" value={viewItin} readOnly className="font-mono"/>
-              </div>
-              <div className="flex-1 min-w-0">
-                {ownerInput}
-              </div>
-            </div>
-          ) : null}
-
-          <Input
-            label="Name"
-            name="name"
-            value={formData.name}
-            onChange={handleChange}
-            readOnly={isReadOnly}
-            required={!isViewMode}
-            placeholder="Item Name"
-          />
-
-          <Input
-            label="Description"
-            name="description"
-            value={formData.description}
-            onChange={handleChange}
-            readOnly={isReadOnly}
-            required={!isViewMode}
-            placeholder="Description"
-            multiline
-            rows={4}
-            expandable={false}
-          />
-
-          {!isViewMode ? (
-            <div className="flex gap-2">
-              <div className="flex-1">{ownerInput}</div>
-              <div className="flex-1">{expiryInput}</div>
-            </div>
-          ) : expiryInput}
-
-          <Input
-            label="Remarks"
-            name="remarks"
-            value={formData.remarks}
-            onChange={handleChange}
-            readOnly={isReadOnly}
-            placeholder="Remarks"
-            multiline
-            rows={4}
-          />
-
-          <Input
-            label="CS Remarks"
-            name="csRemarks"
-            value={formData.csRemarks}
-            onChange={handleChange}
-            readOnly={isReadOnly}
-            placeholder="CS Remarks"
-            multiline
-            rows={4}
-          />
-
-          {!isReadOnly && !isViewMode && (
-            <div className="pt-4 flex justify-end gap-2 border-t border-gray-200 dark:border-gray-700 mt-2">
-              <Button type="button" variant="secondary" onClick={handleSaveDraft}>
-                <FileText size={16} className="mr-2"/>
-                Save Draft
-              </Button>
-              <Button type="submit" isLoading={isLoading}>
-                <Save size={16} className="mr-2"/>
-                Create Item
-              </Button>
+        <div className="p-4">
+          {statusMessage && (
+            <div className={`mb-4 p-2 rounded border text-sm font-serif ${
+              statusMessage.type === 'success'
+                ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
+                : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
+            }`}>
+              <p className="font-bold">{statusMessage.text}</p>
             </div>
           )}
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-1">
+            {isViewMode ? (
+              <div className="flex gap-2">
+                <div className="w-20 shrink-0">
+                  {/* Added consistency class h-[38px] */}
+                  <Input label="ITIN" value={viewItin} readOnly className="font-mono h-[38px]"/>
+                </div>
+                <div className="flex-1 min-w-0">
+                  {ownerInput}
+                </div>
+              </div>
+            ) : null}
+
+            <Input
+              label="Name"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              readOnly={isReadOnly}
+              required={!isViewMode}
+              placeholder="Item Name"
+            />
+
+            <Input
+              label="Description"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              readOnly={isReadOnly}
+              required={!isViewMode}
+              placeholder="Description"
+              multiline
+              rows={4}
+              expandable={false}
+            />
+
+            {!isViewMode ? (
+              <div className="flex gap-2">
+                <div className="flex-1">{ownerInput}</div>
+                <div className="flex-1">{expiryInput}</div>
+              </div>
+            ) : expiryInput}
+
+            <Input
+              label="Remarks"
+              name="remarks"
+              value={formData.remarks}
+              onChange={handleChange}
+              readOnly={isReadOnly}
+              placeholder="Remarks"
+              multiline
+              rows={4}
+            />
+
+            <Input
+              label="CS Remarks"
+              name="csRemarks"
+              value={formData.csRemarks}
+              onChange={handleChange}
+              readOnly={isReadOnly}
+              placeholder="CS Remarks"
+              multiline
+              rows={4}
+            />
+
+            {!isReadOnly && !isViewMode && (
+              <div className="pt-4 flex justify-end gap-2 border-t border-gray-200 dark:border-gray-700 mt-2">
+                <Button type="button" variant="secondary" onClick={handleSaveDraft}
+                        disabled={!isDirty}> {/* Added disabled prop */}
+                  <FileText size={16} className="mr-2"/>
+                  Save Draft
+                </Button>
+                <Button type="submit" isLoading={isLoading}>
+                  <Save size={16} className="mr-2"/>
+                  Create Item
+                </Button>
+              </div>
+            )}
+          </form>
+        </div>
       </Panel>
     </Page>
   );

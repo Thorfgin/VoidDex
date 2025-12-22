@@ -1,34 +1,41 @@
 import { waitFor } from '@testing-library/react';
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import Scanner from './Scanner';
-import { renderWithRouter } from '../testUtils';
+import { renderWithRouter } from '../utils/testUtils';
 
 const mockNavigate = jest.fn();
 
-// Mock react-router-dom navigate hook
+/** Mock the react-router-dom useNavigate hook. */
 jest.mock('react-router-dom', () => ({
   ...(jest.requireActual('react-router-dom') as any),
   useNavigate: () => mockNavigate,
 }));
 
+/**
+ * Test suite for the Scanner component.
+ */
 describe('Scanner Page', () => {
   let scanSuccessCallback: ((decodedText: string) => void) | undefined;
 
+  /**
+   * Mock implementation for Html5Qrcode.start. Captures the success callback.
+   */
   const mockStart = jest.fn(
-      (
-          _cameraConfig: unknown,
-          _config: unknown,
-          onSuccess: (decodedText: string) => void
-          // _onFailure?: (error: unknown) => void
-      ) => {
-        // The 3rd arg is the success callback in our component
-        scanSuccessCallback = onSuccess;
-        return Promise.resolve();
-      }
+    (
+      _cameraConfig: unknown,
+      _config: unknown,
+      onSuccess: (decodedText: string) => void
+    ) => {
+      scanSuccessCallback = onSuccess;
+      return Promise.resolve();
+    }
   );
   const mockStop = jest.fn(() => Promise.resolve());
   const mockClear = jest.fn();
 
+  /**
+   * Sets up the global mock for the Html5Qrcode library with successful implementations.
+   */
   const setupHtml5QrcodeSuccessMock = () => {
     (globalThis as any).Html5Qrcode = jest.fn().mockImplementation(() => ({
       start: mockStart,
@@ -44,32 +51,32 @@ describe('Scanner Page', () => {
     setupHtml5QrcodeSuccessMock();
   });
 
+  /** Tests that the necessary elements for the scanner are rendered. */
   test('renders scanner container', () => {
     const { getByText } = renderWithRouter(<Scanner />, '/scan');
 
-    expect(getByText('Scan Code')).toBeTruthy();
+    expect(getByText('SCAN CODE')).toBeTruthy();
     const reader = document.getElementById('reader');
     expect(reader).toBeTruthy();
   });
 
+  /** Tests successful navigation after scanning an item URL. */
   test('navigates on successful item scan', async () => {
     renderWithRouter(<Scanner />, '/scan');
 
-    // Wait until the scanner has started and callback is registered
     await waitFor(() => {
       expect(mockStart).toHaveBeenCalled();
       expect(scanSuccessCallback).toBeDefined();
     });
 
-    // Simulate a successful scan of an item URL
     scanSuccessCallback?.('https://voiddex.app/items/1234');
     expect(mockNavigate).toHaveBeenCalledWith('/items/1234');
   });
 
+  /** Tests error handling when camera permissions are denied. */
   test('displays permission error if camera fails to start', async () => {
-    // Override Html5Qrcode to simulate failure on start
     const failingStart = jest.fn(() =>
-        Promise.reject(new Error('Permission denied'))
+      Promise.reject(new Error('Permission denied'))
     );
 
     (globalThis as any).Html5Qrcode = jest.fn().mockImplementation(() => ({
@@ -81,11 +88,11 @@ describe('Scanner Page', () => {
 
     const { findByText } = renderWithRouter(<Scanner />, '/scan');
 
-    // The component maps permission errors to a friendly message
     const msg = await findByText(/Camera permission denied/i);
     expect(msg).toBeTruthy();
   });
 
+  /** Tests successful navigation after scanning a condition URL. */
   test('navigates on successful condition scan', async () => {
     renderWithRouter(<Scanner />, '/scan');
 
@@ -95,6 +102,7 @@ describe('Scanner Page', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/conditions/9999');
   });
 
+  /** Tests successful navigation after scanning a power URL. */
   test('navigates on successful power scan', async () => {
     renderWithRouter(<Scanner />, '/scan');
 
@@ -104,25 +112,22 @@ describe('Scanner Page', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/powers/6000');
   });
 
+  /** Tests that QR codes without the resource type pattern are ignored silently. */
   test('ignores QR codes that do not match the expected pattern', async () => {
     const { queryByText } = renderWithRouter(<Scanner />, '/scan');
 
-    // Wait until the scanner has started and callback has been registered
     await waitFor(() => {
       expect(scanSuccessCallback).toBeDefined();
     });
 
-    // This string does NOT match the regex (no "item/condition/power" segment)
     scanSuccessCallback!("https://example.com/foo/1234");
 
-    // We should NOT navigate anywhere
     expect(mockNavigate).not.toHaveBeenCalled();
-
-    // And we should NOT show the "Scanner Error" overlay caused by setError()
     expect(queryByText(/Scanner Error/i)).toBeNull();
     expect(queryByText(/Unknown type in QR/i)).toBeNull();
   });
 
+  /** Tests that completely random QR text is ignored. */
   test('ignores completely invalid QR text (no regex match)', async () => {
     renderWithRouter(<Scanner />, '/scan');
 
@@ -130,7 +135,6 @@ describe('Scanner Page', () => {
 
     scanSuccessCallback!("hello world");
 
-    // No navigation should happen
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 });

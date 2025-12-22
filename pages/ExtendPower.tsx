@@ -1,14 +1,24 @@
+/**
+ * ExtendPower Component
+ *
+ * This page facilitates searching for a specific Power (by POIN) and updating the expiry date
+ * for selected assigned players (PLINs). It uses declarative state for modal management,
+ * handles unsaved changes with navigation guards, and manages local drafts via offline storage.
+ */
 import React, {useState, useEffect, useRef} from 'react';
 import {useNavigate, useLocation} from 'react-router-dom';
-import Input from '../components/ui/Input';
-import Button from '../components/ui/Button';
-import ConfirmModal from '../components/ui/ConfirmModal';
 import {searchPowerByPoin, updatePower, getCharacterName} from '../services/api';
 import {saveStoredChange, deleteStoredChange} from '../services/offlineStorage';
 import {Power} from '../types';
+
+// IMPORT COMPONENTS
+import Page from '../components/layout/Page';
+import Panel from '../components/layout/Panel';
+import Input from '../components/ui/Input';
+import Button from '../components/ui/Button';
+import ConfirmModal from '../components/ui/ConfirmModal';
 import {
   Search,
-  CalendarPlus,
   Home,
   ArrowLeft,
   Save,
@@ -17,16 +27,54 @@ import {
   Square,
   X,
   FileText,
-  CalendarClock
+  CalendarPlus,
+  CalendarClock,
+  AlertTriangle,
+  LucideIcon
 } from 'lucide-react';
-import Page from '../components/layout/Page';
-import Panel from '../components/layout/Panel';
+
+// IMPORT UTILS
+import {getDefaultExpiry, formatDate} from "../utils/dateUtils";
+
+
+/**
+ * Define ModalConfig type for declarative state management of the ConfirmModal.
+ */
+type ModalConfig = {
+  isOpen: boolean;
+  title: string;
+  message: React.ReactNode;
+  primaryAction: React.ComponentProps<typeof ConfirmModal>['primaryAction'];
+  secondaryAction?: React.ComponentProps<typeof ConfirmModal>['secondaryAction'];
+  icon?: LucideIcon;
+  iconColorClass?: string;
+}
+
+/**
+ * Validates the expiry date string for format (DD/MM/YYYY), date range (1980-2100),
+ * and calendar validity (e.g., February 30th is invalid).
+ */
+const validateExpiryDate = (val: string): string | null => {
+  if (val === 'until death' || val === '') return null;
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return 'Invalid date format (DD/MM/YYYY)';
+  const [d, m, y] = val.split('/').map(Number);
+  if (d < 1 || d > 31) return 'Day must be between 1 and 31';
+  else if (m < 1 || m > 12) return 'Month must be between 1 and 12';
+  else if (y < 1980 || y > 2100) return 'Year must be between 1980 and 2100';
+
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) {
+    return 'Invalid calendar date.';
+  }
+
+  return null;
+};
+
 
 const ExtendPower: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // noinspection SpellCheckingInspection
   const [poinSearch, setPoinSearch] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState('');
@@ -36,42 +84,43 @@ const ExtendPower: React.FC = () => {
   const [power, setPower] = useState<Power | null>(null);
 
   const [selectedPlins, setSelectedPlins] = useState<Set<string>>(new Set());
-  // noinspection SpellCheckingInspection
+
   const [showPlinDropdown, setShowPlinDropdown] = useState(false);
-  // noinspection SpellCheckingInspection
   const [plinFilter, setPlinFilter] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
-  // noinspection SpellCheckingInspection
   const plinInputRef = useRef<HTMLInputElement>(null);
 
   const [expiryDate, setExpiryDate] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [confirmTitle, setConfirmTitle] = useState("Discard Changes?");
-  const [confirmMessage, setConfirmMessage] = useState("You have unsaved changes. Are you sure you want to discard them?");
-  const [confirmLabel, setConfirmLabel] = useState("Discard");
-  const [confirmVariant, setConfirmVariant] = useState<'primary' | 'danger'>("danger");
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
+
+  const closeModal = () => setModalConfig(null);
+
   const [draftId, setDraftId] = useState<string | null>(() => location.state?.draftId || null);
   const [draftTimestamp, setDraftTimestamp] = useState<number | null>(() => location.state?.draftTimestamp || null);
 
   const [baselineJson, setBaselineJson] = useState('');
 
+  /**
+   * Generates a string representation of the current component state (selected PLINs and expiry date)
+   * used to check for unsaved changes against the baseline.
+   */
   const getCurrentStateString = () => JSON.stringify({
     selectedPlins: Array.from(selectedPlins).sort(),
     expiryDate
   });
 
   const isUnsaved = power !== null && getCurrentStateString() !== baselineJson && !statusMessage?.text.includes("Updated");
-  const effectiveExpiry = expiryDate.trim() === '' ? 'until death' : expiryDate;
-  const isDirtyDB = power?.assignments.some(a =>
-    selectedPlins.has(a.plin) && a.expiryDate !== effectiveExpiry
-  ) && !statusMessage?.text.includes("Updated");
+
+  const isDirtyDB = (isUnsaved || draftId) && selectedPlins.size > 0;
 
   const inputClasses = "w-full px-3 py-2 border rounded shadow-inner font-serif text-sm transition-all duration-200 border-gray-300 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 focus:outline-none bg-white text-gray-900 dark:bg-gray-900 dark:text-white dark:border-gray-600";
 
+  /**
+   * Effect hook to warn the user about unsaved changes before page unload/closing the tab.
+   */
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isUnsaved) {
@@ -92,14 +141,27 @@ const ExtendPower: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  /**
+   * Implements a navigation guard, prompting the user with a modal if `isUnsaved` is true
+   * before executing the requested navigation action.
+   */
   const confirmNavigation = (action: () => void) => {
     if (isUnsaved) {
-      setConfirmTitle("Discard Changes?");
-      setConfirmMessage("You have unsaved changes. Are you sure you want to discard them?");
-      setConfirmLabel("Discard");
-      setConfirmVariant("danger");
-      setPendingAction(() => action);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Discard Changes?",
+        message: "You have unsaved changes. Are you sure you want to discard them?",
+        primaryAction: {
+          label: "Discard",
+          handler: () => {
+            action();
+            closeModal();
+          },
+          variant: "danger",
+        },
+        icon: AlertTriangle,
+        iconColorClass: "text-amber-600 dark:text-amber-500",
+      });
     } else {
       action();
     }
@@ -113,7 +175,6 @@ const ExtendPower: React.FC = () => {
         setPoinSearch(savedPower.poin);
         setExpiryDate(savedExpiry);
 
-        // Safe default for the potentially undefined array from old drafts
         const safePlins = savedPlins || [];
         setSelectedPlins(new Set(safePlins));
         setBaselineJson(JSON.stringify({
@@ -160,10 +221,8 @@ const ExtendPower: React.FC = () => {
     setDraftId(null);
     setDraftTimestamp(null);
 
-    // noinspection SpellCheckingInspection
     const poinRegex = /^\d{4}$/;
     if (!poinRegex.test(poinSearch)) {
-      // noinspection SpellCheckingInspection
       setSearchError('Invalid POIN.');
       return;
     }
@@ -184,11 +243,13 @@ const ExtendPower: React.FC = () => {
     }
   };
 
+  /**
+   * Saves the current player selection and new expiry date as a local draft in offline storage.
+   */
   const handleSaveDraft = () => {
     if (!power) return;
     const id = draftId || `draft-${Date.now()}`;
     const now = Date.now();
-    // noinspection SpellCheckingInspection
     saveStoredChange({
       id: id,
       type: 'power',
@@ -207,7 +268,10 @@ const ExtendPower: React.FC = () => {
     }, 3000);
   };
 
-  // noinspection SpellCheckingInspection
+  /**
+   * Toggles the selection status of a single PLIN. If it's the first PLIN selected
+   * and the expiry date is empty, it attempts to pre-fill the expiry date.
+   */
   const togglePlinSelect = (plin: string) => {
     const newSet = new Set(selectedPlins);
     if (newSet.has(plin)) {
@@ -216,7 +280,15 @@ const ExtendPower: React.FC = () => {
       newSet.add(plin);
       if (newSet.size === 1 && power && expiryDate === '') {
         const assign = power.assignments.find(a => a.plin === plin);
-        if (assign) setExpiryDate(assign.expiryDate);
+        if (assign && assign.expiryDate === 'until death') {
+          setExpiryDate('');
+        }
+        // --- END FIX ---
+        else if (assign && assign.expiryDate) {
+          setExpiryDate(assign.expiryDate);
+        } else {
+          setExpiryDate(getDefaultExpiry());
+        }
       }
     }
     setSelectedPlins(newSet);
@@ -229,6 +301,9 @@ const ExtendPower: React.FC = () => {
     return a.plin.toLowerCase().includes(search) || name.toLowerCase().includes(search);
   }) || [];
 
+  /**
+   * Toggles selection for all currently visible (filtered) assignments.
+   */
   const toggleSelectFiltered = () => {
     const newSet = new Set(selectedPlins);
     const allFilteredSelected = filteredAssignments.length > 0 && filteredAssignments.every(a => newSet.has(a.plin));
@@ -238,7 +313,12 @@ const ExtendPower: React.FC = () => {
     } else {
       filteredAssignments.forEach(a => newSet.add(a.plin));
       if (filteredAssignments.length > 0 && expiryDate === '') {
-        setExpiryDate(filteredAssignments[0].expiryDate);
+        const firstAssignment = filteredAssignments.find(a => a.expiryDate && a.expiryDate !== 'until death');
+        if (firstAssignment) {
+          setExpiryDate(firstAssignment.expiryDate);
+        } else {
+          setExpiryDate(getDefaultExpiry());
+        }
       }
     }
     setSelectedPlins(newSet);
@@ -246,58 +326,59 @@ const ExtendPower: React.FC = () => {
 
   const isAllFilteredSelected = filteredAssignments.length > 0 && filteredAssignments.every(a => selectedPlins.has(a.plin));
 
-  const formatDate = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    let day = clean.slice(0, 2);
-    let month = clean.slice(2, 4);
-    let year = clean.slice(4, 8);
-    if (day.length === 2) day = day.toString().padStart(2, '0');
-    if (month.length === 2) month = month.toString().padStart(2, '0');
-    let res = day;
-    if (clean.length >= 3) res += `/${month}`;
-    if (clean.length >= 5) res += `/${year}`;
-    return res;
-  };
-
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     if (expiryDate && val.length < expiryDate.length) setExpiryDate(val);
     else setExpiryDate(formatDate(val));
   };
 
+  /**
+   * Adds one year to the current expiry date and rounds it up to the first of the next month if necessary.
+   */
   const handleAddYearAndRound = () => {
     if (!expiryDate || expiryDate === 'until death') return;
     setStatusMessage(null);
+
+    // Re-check validation, as the format must be exact for calculation
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) {
+      setStatusMessage({type: 'error', text: 'Please enter a valid DD/MM/YYYY date before adding a year.'});
+      return;
+    }
+
     const parts = expiryDate.split('/');
-    if (parts.length !== 3) return;
     const day = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10) - 1;
     const year = parseInt(parts[2], 10);
+
     const date = new Date(year, month, day);
-    if (isNaN(date.getTime())) return;
+
+    if (isNaN(date.getTime())) {
+      setStatusMessage({type: 'error', text: 'Invalid calendar date detected.'});
+      return;
+    }
+
     date.setFullYear(date.getFullYear() + 1);
+
+    // If the new date is not the 1st, set it to the 1st of the next month (rounding up)
     if (date.getDate() !== 1) {
       date.setDate(1);
       date.setMonth(date.getMonth() + 1);
     }
-    if (date.getFullYear() > 2100) return;
+
+    if (date.getFullYear() > 2100) {
+      setStatusMessage({type: 'error', text: 'Cannot set expiry past year 2100.'});
+      return;
+    }
+
     const newDay = String(date.getDate()).padStart(2, '0');
     const newMonth = String(date.getMonth() + 1).padStart(2, '0');
     const newYear = date.getFullYear();
-    setExpiryDate(`${newDay}/${newMonth}/${newYear}`);
+    setExpiryDate(formatDate(`${newDay}${newMonth}${newYear}`));
   };
 
-  const validateExpiryDate = (val: string): string | null => {
-    if (val === 'until death' || val === '') return null;
-    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(val)) return 'Invalid date format (DD/MM/YYYY)';
-    const [d, m, y] = val.split('/').map(Number);
-    if (d < 1 || d > 31) return 'Day must be between 1 and 31';
-    else if (m < 1 || m > 12) return 'Month must be between 1 and 12';
-    else if (y < 1980 || y > 2100) return 'Year must be between 1980 and 2100';
-    return null;
-  };
-
-
+  /**
+   * Determines the Tailwind CSS class to visually indicate the expiry status (e.g., red for expired).
+   */
   const getExpiryStatusClass = (dateStr: string) => {
     if (!dateStr || dateStr === 'until death') return 'text-green-600 dark:text-green-400';
     const parts = dateStr.split('/');
@@ -312,35 +393,49 @@ const ExtendPower: React.FC = () => {
     return expiry < today ? 'text-red-600 dark:text-red-400 font-bold' : 'text-green-600 dark:text-green-400';
   };
 
+  /**
+   * The core function to perform the Power update API call.
+   */
   const executeUpdate = async () => {
+    if (!power) return;
+
     const newEffectiveExpiry = expiryDate.trim() === '' ? 'until death' : expiryDate;
     setIsUpdating(true);
     setStatusMessage(null);
     try {
-      const newAssignments = power!.assignments.map(a =>
+      const newAssignments = power.assignments.map(a =>
         selectedPlins.has(a.plin) ? {...a, expiryDate: newEffectiveExpiry} : a
       );
-      const result = await updatePower(power!.poin, {assignments: newAssignments});
+      const result = await updatePower(power.poin, {assignments: newAssignments});
       if (result.success) {
         if (draftId) {
           deleteStoredChange(draftId);
           setDraftId(null);
           setDraftTimestamp(null);
         }
-        const updatedPlins = Array.from(selectedPlins).join(', ');
-        setStatusMessage({type: 'success', text: `Updated expiry for: ${updatedPlins}`});
+        const updatedCount = selectedPlins.size;
+        const firstPlin = Array.from(selectedPlins)[0];
+        const msg = updatedCount === 1
+          ? `Updated expiry for ${firstPlin}.`
+          : `Updated expiry for ${updatedCount} players (e.g., ${firstPlin}).`;
+
+        setStatusMessage({type: 'success', text: msg});
         setPower({...power!, assignments: newAssignments});
         setBaselineJson(getCurrentStateString());
       } else {
-        setStatusMessage({type: 'error', text: 'Failed.'});
+        setStatusMessage({type: 'error', text: 'Update Failed: ' + (result as any).error});
       }
     } catch (err) {
-      setStatusMessage({type: 'error', text: 'Error'});
+      setStatusMessage({type: 'error', text: 'An unexpected error occurred during power update.'});
     } finally {
       setIsUpdating(false);
     }
   };
 
+  /**
+   * Handles the update submission: performs final validation and displays confirmation modals
+   * for draft processing or mass updates (3+ players) before calling `executeUpdate`.
+   */
   const handleUpdate = () => {
     if (!power || selectedPlins.size === 0) return;
 
@@ -350,34 +445,64 @@ const ExtendPower: React.FC = () => {
       return;
     }
 
+    const action = () => executeUpdate();
+
     if (draftId) {
-      setConfirmTitle("Process Draft?");
-      setConfirmMessage("The object may have been changed since this draft was stored. Proceed?");
-      setConfirmLabel("Process");
-      setConfirmVariant("primary");
-      setPendingAction(() => executeUpdate);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Process Draft?",
+        message: "The object may have been changed since this draft was stored. Proceed?",
+        primaryAction: {
+          label: "Confirm",
+          handler: () => {
+            action().then();
+            closeModal();
+          },
+          variant: "primary",
+        },
+        secondaryAction: {label: "Cancel", handler: closeModal},
+        icon: AlertTriangle,
+        iconColorClass: "text-blue-600 dark:text-blue-500",
+      });
       return;
     }
 
-    if (selectedPlins.size >= 5) {
-      setConfirmTitle("Confirm Mass Update");
-      setConfirmMessage(`You are about to update the expiry date for ${selectedPlins.size} players. Do you want to proceed?`);
-      setConfirmLabel("Update");
-      setConfirmVariant("primary");
-      setPendingAction(() => executeUpdate);
-      setShowConfirm(true);
+    if (selectedPlins.size >= 3) {
+      setModalConfig({
+        isOpen: true,
+        title: "Confirm Mass Update",
+        message: `You are about to update the expiry date for ${selectedPlins.size} players. Do you want to proceed?`,
+        primaryAction: {
+          label: "Confirm",
+          handler: () => {
+            action().then();
+            closeModal();
+          },
+          variant: "primary",
+        },
+        secondaryAction: {label: "Cancel", handler: closeModal},
+        icon: AlertTriangle,
+        iconColorClass: "text-amber-600 dark:text-amber-500",
+      });
     } else {
-      executeUpdate().then();
+      action().then();
     }
   };
 
+  /**
+   * Utility to format and truncate the list of assigned players for display.
+   */
   const getAssignedPlayersDisplay = () => {
     if (!power || !power.assignments || power.assignments.length === 0) return 'None';
-    return power.assignments.map(a => {
+    const displayAssignments = power.assignments.slice(0, 5).map(a => {
       const n = getCharacterName(a.plin);
-      return n ? `${a.plin} ${n}` : a.plin;
-    }).join('\n');
+      return n ? `${a.plin} (${n})` : a.plin;
+    });
+
+    if (power.assignments.length > 5) {
+      displayAssignments.push(`... and ${power.assignments.length - 5} more.`);
+    }
+    return displayAssignments.join('\n');
   }
 
   // --- Panel Header Definitions ---
@@ -390,35 +515,35 @@ const ExtendPower: React.FC = () => {
 
   return (
     <Page>
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        title={confirmTitle}
-        message={confirmMessage}
-        confirmLabel={confirmLabel}
-        confirmVariant={confirmVariant}
-        onConfirm={() => {
-          if (pendingAction) pendingAction();
-          setShowConfirm(false);
-          setPendingAction(null);
-        }}
-      />
+      {modalConfig && (
+        <ConfirmModal
+          isOpen={modalConfig.isOpen}
+          onClose={closeModal}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          primaryAction={modalConfig.primaryAction}
+          secondaryAction={modalConfig.secondaryAction}
+          icon={modalConfig.icon}
+          iconColorClass={modalConfig.iconColorClass}
+        />
+      )}
 
       {/* --- Page Header / Nav Area --- */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
           {(returnQuery || returnTo) && (
             <Button variant="secondary" type="button"
-                    onClick={() => confirmNavigation(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
+                    onClick={() => confirmNavigation(() => navigate(returnTo || `/?${returnQuery}`))} title="Back"
+                    data-testid="back-button">
               <ArrowLeft size={16}/>
             </Button>
           )}
           <Button variant="secondary" type="button" onClick={() => confirmNavigation(() => navigate('/'))}
-                  title="Dashboard">
+                  title="Dashboard" data-testid="dashboard-button">
             <Home size={16}/>
           </Button>
           <Button variant="secondary" type="button" onClick={() => confirmNavigation(handleResetSearch)}
-                  title="New Search">
+                  title="New Search" data-testid="new-search-button">
             <Search size={16}/>
           </Button>
         </div>
@@ -433,12 +558,20 @@ const ExtendPower: React.FC = () => {
         <div className="p-4">
           {!power && (
             <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto">
-              <Input label="Enter POIN" value={poinSearch}
-                     onChange={(e) => setPoinSearch(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                     placeholder="4-digit ID" error={searchError} className="mb-0" inputMode="numeric"/>
+              <Input
+                label="Enter POIN"
+                id="poin-search-input"
+                data-testid="poin-search-input"
+                value={poinSearch}
+                onChange={(e) => setPoinSearch(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="4-digit ID"
+                error={searchError}
+                className="mb-0"
+                inputMode="numeric"
+              />
               <div className="flex justify-end">
-                <Button type="submit" isLoading={isSearching} disabled={!poinSearch}><Search size={16}
-                                                                                             className="mr-2"/> Find</Button>
+                <Button type="submit" isLoading={isSearching} disabled={!poinSearch} data-testid="find-poin-button"><Search size={16}
+                                                                                                                            className="mr-2"/> Find</Button>
               </div>
             </form>
           )}
@@ -446,36 +579,56 @@ const ExtendPower: React.FC = () => {
             <div className="space-y-2 animation-fade-in">
               {statusMessage && (
                 <div
-                  className={`p-2 rounded border text-sm font-serif ${statusMessage.type === 'success' ? 'bg-green-50 border-green-300 text-green-800' : 'bg-red-50 border-red-300 text-red-800'}`}>
+                  className={`p-2 rounded border text-sm font-serif ${statusMessage.type === 'success' ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'}`}
+                  data-testid="status-message">
                   {statusMessage.text}
                 </div>
               )}
 
               <div className="flex gap-2">
                 <div className="w-20 shrink-0">
-                  <Input label="POIN" value={power.poin} readOnly
-                         className="font-mono bg-entity-power/10 text-entity-power h-[38px]"/>
+                  <Input
+                    label="POIN"
+                    id="power-poin-display"
+                    data-testid="power-poin-display"
+                    value={power.poin}
+                    readOnly
+                    className="font-mono bg-entity-power/10 text-entity-power h-[38px]"/>
                 </div>
                 <div className="flex-1 min-w-0">
                   <Input
                     label="Assigned Players"
+                    id="assigned-players-display"
+                    data-testid="assigned-players-display"
                     value={getAssignedPlayersDisplay()}
                     readOnly
                     placeholder="None"
                     multiline={true}
+                    rows={power.assignments.length > 5 ? 6 : Math.max(2, power.assignments.length)}
                   />
                 </div>
               </div>
 
-              <Input label="Name" value={power.name} readOnly/>
-              <Input label="Description" value={power.description} readOnly multiline rows={3}/>
+              <Input
+                label="Name"
+                id="power-name-display"
+                data-testid="power-name-display"
+                value={power.name}
+                readOnly/>
+              <Input
+                label="Description"
+                id="power-description-display"
+                data-testid="power-description-display"
+                value={power.description}
+                readOnly
+                multiline
+                rows={3}/>
 
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <div
                   className="p-4 rounded-lg bg-pink-50/50 dark:bg-pink-900/10 border border-pink-100 dark:border-pink-900/30">
                   <h3
                     className="text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-4 flex items-center gap-2">
-                    {/* The icon for the internal section is now CalendarClock, consistent with the header */}
                     <CalendarClock size={16} className="text-pink-600 dark:text-pink-400"/>
                     Update Expiry for Players
                   </h3>
@@ -483,11 +636,15 @@ const ExtendPower: React.FC = () => {
                   {/* Player Selection */}
                   <div className="relative mb-4" ref={dropdownRef}>
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif">Select
-                        Players</label>
+                      <label
+                        className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif"
+                        htmlFor="plin-filter-input">
+                        Select Players
+                      </label>
                       {selectedPlins.size > 0 && (
                         <span
-                          className="text-xs font-bold text-pink-600 dark:text-pink-400 bg-pink-100 dark:bg-pink-900/50 px-2 py-0.5 rounded-full">
+                          className="text-xs font-bold text-pink-600 dark:text-pink-400 bg-pink-100 dark:bg-pink-900/50 px-2 py-0.5 rounded-full"
+                          data-testid="selected-plin-count">
                                        {selectedPlins.size} Selected
                                    </span>
                       )}
@@ -499,6 +656,8 @@ const ExtendPower: React.FC = () => {
                         <input
                           ref={plinInputRef}
                           type="text"
+                          id="plin-filter-input"
+                          data-testid="plin-filter-input"
                           className={`${inputClasses} pr-8`}
                           placeholder="Filter by PLIN or Name..."
                           value={plinFilter}
@@ -528,10 +687,12 @@ const ExtendPower: React.FC = () => {
                       {/* Dropdown Menu - Opens Upwards */}
                       {showPlinDropdown && power.assignments.length > 0 && (
                         <div
-                          className="absolute bottom-full mb-1 z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto">
+                          className="absolute bottom-full mb-1 z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto"
+                          data-testid="plin-dropdown-menu">
                           <div
                             className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-pointer text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-2 sticky top-0 z-20"
                             onClick={toggleSelectFiltered}
+                            data-testid="select-all-filtered-button"
                           >
                             {isAllFilteredSelected ? <CheckSquare size={14}/> : <Square size={14}/>}
                             {isAllFilteredSelected ? "Deselect All" : "Select All"}
@@ -543,6 +704,7 @@ const ExtendPower: React.FC = () => {
                               return (
                                 <div
                                   key={a.plin}
+                                  data-testid={`plin-select-item-${a.plin}`}
                                   className={`px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-700 last:border-0 flex items-center gap-3 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}`}
                                   onClick={() => togglePlinSelect(a.plin)}
                                 >
@@ -569,11 +731,16 @@ const ExtendPower: React.FC = () => {
                     </div>
                   </div>
 
-                  <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-1.5">New
-                    Expiry Date:</label>
+                  <label
+                    className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-1.5"
+                    htmlFor="new-expiry-date-input">
+                    New Expiry Date:
+                  </label>
                   <div className="flex gap-2">
                     <input
                       type="text"
+                      id="new-expiry-date-input"
+                      data-testid="new-expiry-date-input"
                       className={`${inputClasses} flex-1 min-w-0`}
                       value={expiryDate}
                       onChange={handleDateChange}
@@ -584,21 +751,22 @@ const ExtendPower: React.FC = () => {
                       variant="secondary"
                       type="button"
                       onClick={handleAddYearAndRound}
-                      title="+1 Year"
+                      title="+1 Year & Round Up"
                       disabled={selectedPlins.size === 0}
                       className="h-[38px] w-[38px]"
                       style={{padding: 0}}
+                      data-testid="add-year-button"
                     >
                       <CalendarPlus size={24} strokeWidth={2}/>
                     </Button>
                   </div>
 
                   <div className="flex justify-end mt-4 gap-2">
-                    <Button type="button" variant="secondary" onClick={handleSaveDraft}>
+                    <Button type="button" variant="secondary" onClick={handleSaveDraft} disabled={!isUnsaved} data-testid="save-draft-button">
                       <FileText size={16} className="mr-2"/> Save Draft
                     </Button>
                     <Button type="button" onClick={handleUpdate} isLoading={isUpdating}
-                            disabled={selectedPlins.size === 0 || !isDirtyDB}><Save size={16} className="mr-2"/> Update</Button>
+                            disabled={!isDirtyDB} data-testid="update-expiry-button"><Save size={16} className="mr-2"/> Update</Button>
                   </div>
                 </div>
               </div>

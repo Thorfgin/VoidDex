@@ -9,9 +9,8 @@ const config: JestConfigWithTsJest = {
         '\\.(gif|ttf|eot|svg|png)$': '<rootDir>/test/__mocks__/fileMock.js',
     },
     setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
-    // Less spammy output:
-    silent: true,   // suppresses console.log / console.warn / console.error from tests
-    verbose: false, // don't list every single test by name
+    silent: true,
+    verbose: false
 };
 
 export default config;

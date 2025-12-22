@@ -17,31 +17,24 @@ import {
   ChevronDown,
   X,
   Check,
-  Activity
+  Activity,
+  AlertTriangle,
+  LucideIcon
 } from 'lucide-react';
 import { Condition, Assignment } from '../types';
+import UserPlusMinus from "../components/icons/UserPlusMinus";
+import {formatDate, getDefaultExpiry} from "../utils/dateUtils";
 
-// Custom Icon definition (Kept for completeness)
-const UserPlusMinus = ({ size = 24, className = "" }: { size?: number | string, className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-  >
-    <path d="M13 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="7" cy="7" r="4" />
-    <path d="M19 3v6" />
-    <path d="M16 6h6" />
-    <path d="M16 16h6" />
-  </svg>
-);
+// Define ModalConfig type based on the external ConfirmModalProps
+type ModalConfig = {
+  isOpen: boolean;
+  title: string;
+  message: React.ReactNode;
+  primaryAction: React.ComponentProps<typeof ConfirmModal>['primaryAction'];
+  secondaryAction?: React.ComponentProps<typeof ConfirmModal>['secondaryAction'];
+  icon?: LucideIcon;
+  iconColorClass?: string;
+}
 
 const CreateCondition: React.FC = () => {
   const navigate = useNavigate();
@@ -54,8 +47,8 @@ const CreateCondition: React.FC = () => {
   const [isViewMode, setIsViewMode] = useState(false);
   const [viewCoin, setViewCoin] = useState('');
 
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [modalConfig, setModalConfig] = useState<ModalConfig | null>(null);
+
   const [draftId, setDraftId] = useState<string | null>(() => location.state?.draftId || null);
   const [draftTimestamp, setDraftTimestamp] = useState<number | null>(() => location.state?.draftTimestamp || null);
 
@@ -68,17 +61,6 @@ const CreateCondition: React.FC = () => {
 
   const returnQuery = location.state?.returnQuery;
   const returnTo = location.state?.returnTo;
-
-  const getDefaultExpiry = () => {
-    const date = new Date();
-    date.setDate(1);
-    date.setMonth(date.getMonth() + 1);
-    date.setFullYear(date.getFullYear() + 1);
-    const d = String(date.getDate()).padStart(2, '0');
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const y = date.getFullYear();
-    return `${d}/${m}/${y}`;
-  };
 
   const [formData, setFormData] = useState({
     name: '',
@@ -93,7 +75,9 @@ const CreateCondition: React.FC = () => {
   const characterName = getCharacterName(formData.owner);
   const isDirty = !isReadOnly && !isViewMode && JSON.stringify(formData) !== JSON.stringify(initialState);
 
-  // --- Effects and Handlers (Unchanged Logic) ---
+  const closeModal = () => setModalConfig(null);
+
+  // --- Effects and Handlers (Updated confirmAction and useEffect) ---
 
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -118,8 +102,21 @@ const CreateCondition: React.FC = () => {
 
   const confirmAction = (action: () => void) => {
     if (isDirty) {
-      setPendingAction(() => action);
-      setShowConfirm(true);
+      setModalConfig({
+        isOpen: true,
+        title: "Discard Changes?",
+        message: "You have unsaved changes. Are you sure you want to discard them?",
+        primaryAction: {
+          label: "Discard",
+          handler: () => {
+            action();
+            closeModal();
+          },
+          variant: "danger",
+        },
+        icon: AlertTriangle,
+        iconColorClass: "text-amber-600 dark:text-amber-500",
+      });
     } else {
       action();
     }
@@ -141,20 +138,27 @@ const CreateCondition: React.FC = () => {
         // Logic for Expiry Display
         let expDisplay = '';
         let ownerDisplay = '';
+        let ownerPlin = ''; // Variable to track the actual PLIN for formData
 
         if (assignments.length > 1) {
           expDisplay = 'Multiple';
           ownerDisplay = ''; // Empty to show placeholder "Select player..."
         } else if (assignments.length === 1) {
           expDisplay = assignments[0].expiryDate;
-          const name = getCharacterName(assignments[0].plin);
-          ownerDisplay = name ? `${assignments[0].plin} ${name}` : assignments[0].plin;
+          const plin = assignments[0].plin;
+          const name = getCharacterName(plin);
+
+          // FIX 1: Set ownerPlin and format ownerDisplay correctly for single entry
+          ownerPlin = plin;
+          ownerDisplay = name ? `${plin} ${name}` : plin;
+
         }
 
         const data = {
           name: item.name,
           description: item.description,
-          owner: ownerDisplay,
+          // FIX 2: Use ownerPlin to populate formData.owner
+          owner: ownerPlin,
           expiryDate: expDisplay,
           remarks: item.remarks || '',
           csRemarks: item.csRemarks || ''
@@ -162,7 +166,7 @@ const CreateCondition: React.FC = () => {
 
         setFormData(data);
         setInitialState(data);
-        setOwnerSearch(ownerDisplay);
+        setOwnerSearch(ownerDisplay); // Use the formatted display name for the search input
         setViewCoin(item.coin);
         setIsReadOnly(true);
         setIsViewMode(true);
@@ -225,11 +229,13 @@ const CreateCondition: React.FC = () => {
       remarks: formData.remarks,
       csRemarks: formData.csRemarks
     };
-    navigate(path, {
-      state: {
-        item: currentItem,
-        returnQuery: returnQuery
-      }
+    confirmAction(() => { // Wrap navigation in confirmAction
+      navigate(path, {
+        state: {
+          item: currentItem,
+          returnQuery: returnQuery
+        }
+      });
     });
   };
 
@@ -243,19 +249,6 @@ const CreateCondition: React.FC = () => {
       return `${clean.slice(0, 4)}#${clean.slice(4, 6)}`;
     }
     return clean;
-  };
-
-  const formatDate = (val: string) => {
-    let clean = val.replace(/\D/g, '');
-    let day = clean.slice(0, 2);
-    let month = clean.slice(2, 4);
-    let year = clean.slice(4, 8);
-    if (day.length === 2) day = day.toString().padStart(2, '0');
-    if (month.length === 2) month = month.toString().padStart(2, '0');
-    let res = day;
-    if (clean.length >= 3) res += `/${month}`;
-    if (clean.length >= 5) res += `/${year}`;
-    return res;
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -297,8 +290,8 @@ const CreateCondition: React.FC = () => {
     if (!name.trim()) return "Name is required.";
     if (!description.trim()) return "Description is required.";
     if (!/^\d{1,4}#\d{1,2}$/.test(owner) && owner !== 'SYSTEM' && owner !== '') return "Player must be format 1234#12";
-    if (expiryDate.trim() !== '' && expiryDate !== 'until death') {
-      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) return "Expiry Date must be DD/MM/YYYY or Empty";
+    if (expiryDate.trim() !== '' && expiryDate.toLowerCase() !== 'until death') {
+      if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) return "Expiry Date must be DD/MM/YYYY or 'until death'";
     }
     return null;
   };
@@ -331,6 +324,10 @@ const CreateCondition: React.FC = () => {
           setDraftId(null);
           setDraftTimestamp(null);
         }
+
+        // FIX 3: Update originalAssignments array for immediate view mode display
+        setOriginalAssignments(assignments);
+
         setStatusMessage({ type: 'success', text: `Condition Created! COIN: ${result.data.coin}` });
         setIsReadOnly(true);
         setInitialState(formData);
@@ -350,8 +347,10 @@ const CreateCondition: React.FC = () => {
   const handleOwnerSelect = (assign: Assignment) => {
     const name = getCharacterName(assign.plin);
     const displayName = name ? `${assign.plin} ${name}` : assign.plin;
+
+    // Ensure both owner (PLIN) and search (Display Name) are updated
     setOwnerSearch(displayName);
-    setFormData(prev => ({ ...prev, expiryDate: assign.expiryDate }));
+    setFormData(prev => ({ ...prev, owner: assign.plin, expiryDate: assign.expiryDate }));
     setShowOwnerDropdown(false);
   };
 
@@ -360,7 +359,7 @@ const CreateCondition: React.FC = () => {
     if (!showOwnerDropdown) setShowOwnerDropdown(true);
     // Reset expiry to "Multiple" if clearing search or changing it manually in view mode
     if (originalAssignments.length > 1) {
-      setFormData(prev => ({ ...prev, expiryDate: 'Multiple' }));
+      setFormData(prev => ({ ...prev, expiryDate: 'Multiple', owner: '' }));
     }
   };
 
@@ -390,9 +389,10 @@ const CreateCondition: React.FC = () => {
               ref={ownerInputRef}
               type="text"
               className={`${inputClasses} pr-8`}
-              placeholder={originalAssignments.length > 1 ? "Select player to view..." : "None"}
+              placeholder={originalAssignments.length > 1 ? "Select player to view..." : (originalAssignments.length === 0 ? "None" : originalAssignments[0].plin)}
               value={ownerSearch}
               onChange={handleOwnerSearchChange}
+              readOnly={isReadOnly}
               onFocus={() => {
                 if (originalAssignments.length > 0) setShowOwnerDropdown(true);
               }}
@@ -404,11 +404,10 @@ const CreateCondition: React.FC = () => {
                 if (ownerSearch) {
                   // Smart Clear: Clear text, open dropdown, focus input
                   setOwnerSearch('');
+                  // When clearing the search, reset formData.owner to empty string and expiry for multi-assignment view
+                  setFormData(prev => ({ ...prev, owner: '', expiryDate: originalAssignments.length > 1 ? 'Multiple' : '' }));
                   setShowOwnerDropdown(true);
                   ownerInputRef.current?.focus();
-                  if (originalAssignments.length > 1) {
-                    setFormData(prev => ({ ...prev, expiryDate: 'Multiple' }));
-                  }
                 } else {
                   // Toggle if empty
                   setShowOwnerDropdown(!showOwnerDropdown);
@@ -435,8 +434,8 @@ const CreateCondition: React.FC = () => {
                         <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{getCharacterName(a.plin)}</div>
                       )}
                     </div>
-                    {/* The checkmark logic below is maintained from the original pattern */}
-                    {formData.expiryDate === a.expiryDate && ownerSearch.includes(a.plin) && (
+                    {/* Checkmark logic updated to check for current selected owner PLIN */}
+                    {formData.owner === a.plin && (
                       <Check size={14} className="text-green-600 dark:text-green-400" />
                     )}
                   </div>
@@ -482,43 +481,51 @@ const CreateCondition: React.FC = () => {
 
   // Preparing Panel content
   const headerLeftContent = (<Activity size={20} className="text-entity-item" />);
-  const headerRightContent=(draftId && draftTimestamp ? (
-    <span>
+  const headerRightContent = (draftId && draftTimestamp ? (
+    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
         <span className="font-bold">(Draft)</span>
-      {new Date(draftTimestamp).toLocaleString()}
-      </span>) : null)
+      {new Date(draftTimestamp).toLocaleDateString()}
+      </span>
+  ) : null)
 
   // --- Main Render Block ---
 
   return (
-    // 1. Use the new Page component
     <Page maxWidth="xl" className="landscape:w-9/12 relative">
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        onConfirm={() => {
-          if (pendingAction) pendingAction();
-          setShowConfirm(false);
-          setPendingAction(null);
-        }}
-      />
+      {/* Generic Modal Rendering */}
+      {modalConfig && (
+        <ConfirmModal
+          isOpen={modalConfig.isOpen}
+          onClose={closeModal}
+          title={modalConfig.title}
+          message={modalConfig.message}
+          primaryAction={modalConfig.primaryAction}
+          secondaryAction={modalConfig.secondaryAction}
+          icon={modalConfig.icon}
+          iconColorClass={modalConfig.iconColorClass}
+        />
+      )}
 
       {/* Top Button Bar - remains outside the Panel */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
+          {/* Back Button */}
           {(returnQuery || returnTo) && (
             <Button variant="secondary" type="button" onClick={handleBack} title="Back">
               <ArrowLeft size={16} />
             </Button>
           )}
+          {/* Home Button */}
           <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate('/'))} title="Dashboard">
             <Home size={16} />
           </Button>
         </div>
         <div className="flex gap-2">
+          {/* New Search Button */}
           <Button variant="secondary" type="button" onClick={() => confirmAction(handleReset)} title="Create New">
             <FilePlus size={16} />
           </Button>
+          {/* View Mode Actions */}
           {isViewMode && (
             <>
               <Button variant="secondary" type="button" onClick={() => handleNavigateWithState('/extend-condition')} title="Extend Condition">
@@ -538,54 +545,55 @@ const CreateCondition: React.FC = () => {
         headerLeftContent={headerLeftContent}
         headerRightContent={headerRightContent}
       >
-        {statusMessage && (
-          <div className={`mb-4 p-2 rounded border text-sm font-serif ${
-            statusMessage.type === 'success'
-              ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
-              : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-          }`}>
-            <p className="font-bold">{statusMessage.text}</p>
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-1">
-          {isViewMode ? (
-            <div className="flex gap-2">
-              <div className="w-20 shrink-0">
-                {/* Note: Added dark mode classes for COIN display based on the pattern used for ITIN and POIN */}
-                <Input label="COIN" value={viewCoin} readOnly className="font-mono bg-entity-condition/10 text-entity-condition dark:bg-yellow-900/30 dark:text-yellow-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                {ownerInput}
-              </div>
-            </div>
-          ) : null}
-
-          <Input label="Name" name="name" value={formData.name} onChange={handleChange} readOnly={isReadOnly} required={!isViewMode} placeholder="Condition Name" />
-          <Input label="Description" name="description" value={formData.description} onChange={handleChange} readOnly={isReadOnly} required={!isViewMode} placeholder="Description" multiline rows={4} expandable={false} />
-
-          {!isViewMode ? (
-            <div className="flex gap-2">
-              <div className="flex-1">{ownerInput}</div>
-              <div className="flex-1">{expiryInput}</div>
-            </div>
-          ) : expiryInput}
-
-          <Input label="Remarks" name="remarks" value={formData.remarks} onChange={handleChange} readOnly={isReadOnly} placeholder="Remarks" multiline rows={4} />
-          <Input label="CS Remarks" name="csRemarks" value={formData.csRemarks} onChange={handleChange} readOnly={isReadOnly} placeholder="CS Remarks" multiline rows={4} />
-
-          {!isReadOnly && !isViewMode && (
-            <div className="pt-4 flex justify-end gap-2 border-t border-gray-200 dark:border-gray-700 mt-2">
-              <Button type="button" variant="secondary" onClick={handleSaveDraft}>
-                <FileText size={16} className="mr-2" />
-                Save Draft
-              </Button>
-              <Button type="submit" isLoading={isLoading}>
-                <Save size={16} className="mr-2" /> Create Condition
-              </Button>
+        <div className="p-4">
+          {statusMessage && (
+            <div className={`mb-4 p-2 rounded border text-sm font-serif ${
+              statusMessage.type === 'success'
+                ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
+                : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
+            }`}>
+              <p className="font-bold">{statusMessage.text}</p>
             </div>
           )}
-        </form>
+
+          <form onSubmit={handleSubmit} className="space-y-1">
+            {isViewMode ? (
+              <div className="flex gap-2">
+                <div className="w-20 shrink-0">
+                  <Input label="COIN" value={viewCoin} readOnly className="font-mono bg-entity-condition/10 text-entity-condition dark:bg-yellow-900/30 dark:text-yellow-400 h-[38px]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  {ownerInput}
+                </div>
+              </div>
+            ) : null}
+
+            <Input label="Name" name="name" value={formData.name} onChange={handleChange} readOnly={isReadOnly} required={!isViewMode} placeholder="Condition Name" />
+            <Input label="Description" name="description" value={formData.description} onChange={handleChange} readOnly={isReadOnly} required={!isViewMode} placeholder="Description" multiline rows={4} expandable={false} />
+
+            {!isViewMode ? (
+              <div className="flex gap-2">
+                <div className="flex-1">{ownerInput}</div>
+                <div className="flex-1">{expiryInput}</div>
+              </div>
+            ) : expiryInput}
+
+            <Input label="Remarks" name="remarks" value={formData.remarks} onChange={handleChange} readOnly={isReadOnly} placeholder="Remarks" multiline rows={4} />
+            <Input label="CS Remarks" name="csRemarks" value={formData.csRemarks} onChange={handleChange} readOnly={isReadOnly} placeholder="CS Remarks" multiline rows={4} />
+
+            {!isReadOnly && !isViewMode && (
+              <div className="pt-4 flex justify-end gap-2 border-t border-gray-200 dark:border-gray-700 mt-2">
+                <Button type="button" variant="secondary" onClick={handleSaveDraft} disabled={!isDirty}>
+                  <FileText size={16} className="mr-2" />
+                  Save Draft
+                </Button>
+                <Button type="submit" isLoading={isLoading}>
+                  <Save size={16} className="mr-2" /> Create Condition
+                </Button>
+              </div>
+            )}
+          </form>
+        </div>
       </Panel>
     </Page>
   );

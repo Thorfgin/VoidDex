@@ -1,3 +1,12 @@
+/**
+ * MyNotes Component
+ *
+ * Displays a list of all saved notes, supporting filtering, sorting,
+ * single-note actions (edit, delete, pin), and bulk deletion via multi-select.
+ *
+ * The layout is refactored to ensure the main notes list scrolls within the panel,
+ * fixing overflow behavior to be consistent with other major components.
+ */
 import React, {useState, useEffect, useMemo, useRef} from 'react';
 import {useNavigate} from 'react-router-dom';
 
@@ -40,29 +49,36 @@ type FilterType = 'ALL' | 'ITIN' | 'COIN' | 'POIN' | 'PLIN' | 'OTHER';
 type SortField = 'DATE' | 'TITLE';
 type SortDirection = 'ASC' | 'DESC';
 
+/**
+ * @typedef {Object} MyNotes
+ */
 const MyNotes: React.FC = () => {
   const navigate = useNavigate();
   const [notes, setNotes] = useState<Note[]>([]);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // Single Delete State
+  /** @type {Note | null} Note state to confirm single deletion. */
   const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
 
-  // Bulk Selection State
+  /** @type {Set<string>} Set of selected note IDs for bulk actions. */
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScrolling = useRef(false);
 
-  // FIX 1: New Ref to track if long-press SUCCESSFULLY initiated selection
+  /** @type {React.MutableRefObject<boolean>} Flag to track if long-press SUCCESSFULLY initiated selection. */
   const selectionInitiatedRef = useRef(false);
 
-  // Navigation Guard
+  /** @type {string | null} Link being opened, prevents multiple rapid navigations. */
   const [openingLink, setOpeningLink] = useState<string | null>(null);
 
-  // Filter & Sort State
+  /** @type {FilterType} State for filtering the notes list. */
   const [filterType, setFilterType] = useState<FilterType>('ALL');
+
+  /** @type {SortField} State for sorting the notes list. */
   const [sortField, setSortField] = useState<SortField>('DATE');
+
+  /** @type {SortDirection} State for sorting direction. */
   const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
 
   const isSelectionMode = selectedIds.size > 0;
@@ -71,10 +87,13 @@ const MyNotes: React.FC = () => {
     setNotes(getNotes());
   }, []);
 
+  /**
+   * Filters and sorts the notes list based on current state.
+   * @returns {Note[]} The filtered and sorted array of notes.
+   */
   const filteredAndSortedNotes = useMemo(() => {
     let result = [...notes];
 
-    // 1. Filter
     if (filterType !== 'ALL') {
       result = result.filter(note => {
         if (!note.linkedIds || note.linkedIds.length === 0) return false;
@@ -82,7 +101,6 @@ const MyNotes: React.FC = () => {
       });
     }
 
-    // 2. Sort
     result.sort((a, b) => {
       const aPinned = a.isPinned ? 1 : 0;
       const bPinned = b.isPinned ? 1 : 0;
@@ -102,6 +120,10 @@ const MyNotes: React.FC = () => {
     return result;
   }, [notes, filterType, sortField, sortDirection]);
 
+  /**
+   * Toggles the sort direction or switches the sort field.
+   * @param {SortField} field The field to sort by.
+   */
   const handleSortToggle = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(prev => prev === 'ASC' ? 'DESC' : 'ASC');
@@ -111,11 +133,21 @@ const MyNotes: React.FC = () => {
     }
   };
 
+  /**
+   * Sets up the note to be deleted via the confirmation modal.
+   * @param {React.MouseEvent} e Click event to stop propagation.
+   * @param {Note} note The note object to delete.
+   */
   const initiateDelete = (e: React.MouseEvent, note: Note) => {
     e.stopPropagation();
     setNoteToDelete(note);
   };
 
+  /**
+   * Toggles the pinned status of a note.
+   * @param {React.MouseEvent} e Click event to stop propagation.
+   * @param {Note} note The note object to pin/unpin.
+   */
   const togglePin = (e: React.MouseEvent, note: Note) => {
     e.stopPropagation();
     const updatedNote = {...note, isPinned: !note.isPinned};
@@ -123,6 +155,9 @@ const MyNotes: React.FC = () => {
     setNotes(getNotes());
   };
 
+  /**
+   * Confirms and executes the single note deletion.
+   */
   const confirmDelete = () => {
     if (noteToDelete) {
       deleteNote(noteToDelete.id);
@@ -131,6 +166,10 @@ const MyNotes: React.FC = () => {
     }
   };
 
+  /**
+   * Toggles the selection state for a note ID.
+   * @param {string} id The ID of the note.
+   */
   const handleSelectionToggle = (id: string) => {
     const newSet = new Set(selectedIds);
     if (newSet.has(id)) {
@@ -141,12 +180,17 @@ const MyNotes: React.FC = () => {
     setSelectedIds(newSet);
   };
 
+  /**
+   * Clears all selected notes.
+   */
   const clearSelection = () => {
     setSelectedIds(new Set());
   };
 
+  /**
+   * Confirms and executes bulk deletion of selected notes.
+   */
   const confirmBulkDelete = () => {
-    // Correctly iterate and call the single deleteNote function
     selectedIds.forEach(id => deleteNote(id));
     setNotes(getNotes());
     setSelectedIds(new Set());
@@ -155,7 +199,9 @@ const MyNotes: React.FC = () => {
     setTimeout(() => setStatusMessage(null), 2000);
   };
 
-  // --- Multi-Select Fix: Press Handlers ---
+  /**
+   * Clears any pending long press timer.
+   */
   const cancelPress = () => {
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
@@ -163,10 +209,14 @@ const MyNotes: React.FC = () => {
     }
   };
 
+  /**
+   * Starts the long press timer to initiate selection mode.
+   * @param {string} id The ID of the note being pressed.
+   */
   const startPress = (id: string) => {
     cancelPress();
     isScrolling.current = false;
-    selectionInitiatedRef.current = false; // Reset the flag on press down
+    selectionInitiatedRef.current = false;
 
     longPressTimer.current = setTimeout(() => {
       if (!isScrolling.current) {
@@ -175,44 +225,50 @@ const MyNotes: React.FC = () => {
         setSelectedIds(newSet);
         if (navigator.vibrate) navigator.vibrate(50);
 
-        // FIX 2: Set the flag ONLY if the timer fires successfully
         selectionInitiatedRef.current = true;
         longPressTimer.current = null;
       }
     }, 500);
   };
 
+  /**
+   * Handles touch/mouse move to detect scrolling and cancel long press.
+   */
   const handleMove = () => {
     isScrolling.current = true;
     cancelPress();
   };
 
+  /**
+   * Handles click events, prioritizing selection toggle over navigation if selection mode is active or just initiated.
+   * @param {React.MouseEvent} e The click event.
+   * @param {Note} note The note being clicked.
+   */
   const handleCardClick = (e: React.MouseEvent, note: Note) => {
     cancelPress();
 
     const wasSelectionInitiated = selectionInitiatedRef.current;
 
-    // 1. FIX 3: If the long press timer *just* fired, swallow this click event,
-    // prevent navigation/toggle, and reset the flag.
     if (wasSelectionInitiated) {
       e.preventDefault();
       selectionInitiatedRef.current = false;
       return;
     }
 
-    // 2. If already in selection mode, subsequent clicks toggle.
     if (isSelectionMode) {
       e.preventDefault();
       e.stopPropagation();
       handleSelectionToggle(note.id);
     } else {
-      // 3. Standard click action (Only runs if selection mode is off and long press failed/didn't run)
       navigate('/create-note', {state: {note}});
     }
   };
-  // ----------------------------------------
 
-
+  /**
+   * Parses a link string into its type and ID parts.
+   * @param {string} linkStr The raw link string (e.g., 'ITIN:1234').
+   * @returns {{type: 'ITIN' | 'COIN' | 'POIN' | 'PLIN' | 'OTHER' | 'UNKNOWN', id: string}} The parsed link parts.
+   */
   const parseLinkId = (linkStr: string): {
     type: 'ITIN' | 'COIN' | 'POIN' | 'PLIN' | 'OTHER' | 'UNKNOWN',
     id: string
@@ -228,6 +284,11 @@ const MyNotes: React.FC = () => {
     return {type: 'UNKNOWN', id: linkStr};
   };
 
+  /**
+   * Handles navigation or copy action when a linked entity badge is clicked.
+   * @param {React.MouseEvent} e The click event.
+   * @param {string} linkStr The linked entity string.
+   */
   const handleLinkClick = async (e: React.MouseEvent, linkStr: string) => {
     if (isSelectionMode) return;
 
@@ -291,7 +352,7 @@ const MyNotes: React.FC = () => {
           return;
         }
       }
-      alert(`Object ${id} not found.`);
+      console.error(`Object ${id} not found.`);
     } catch (err) {
       console.error("Navigation error", err);
     } finally {
@@ -299,6 +360,11 @@ const MyNotes: React.FC = () => {
     }
   };
 
+  /**
+   * Renders a badge for a linked entity.
+   * @param {string} linkStr The linked entity string.
+   * @returns {JSX.Element} The link badge button.
+   */
   const renderLinkBadge = (linkStr: string) => {
     const {type, id} = parseLinkId(linkStr);
     let styleClass = 'bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300';
@@ -338,33 +404,46 @@ const MyNotes: React.FC = () => {
     );
   };
 
-  // Definition: Correctly defined within the component function scope
   const headerLeftContent = (
     !isSelectionMode ? <StickyNote size={20} className="text-entity-note"/> : null
   );
 
   return (
-    <Page maxWidth="lg">
+    <Page maxWidth="lg" className="flex flex-col h-full">
       <ConfirmModal
         isOpen={!!noteToDelete}
         onClose={() => setNoteToDelete(null)}
-        onConfirm={confirmDelete}
         title="Delete Note?"
-        message={`Are you sure you want to delete "${noteToDelete?.title}"?`}
-        confirmLabel="Delete"
+        message={`Are you sure you want to delete "${noteToDelete?.title}"? This cannot be undone.`}
+        primaryAction={{
+          label: "Delete",
+          handler: confirmDelete,
+          variant: "danger"
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          handler: () => setNoteToDelete(null),
+        }}
       />
 
       <ConfirmModal
         isOpen={showBulkDeleteConfirm}
         onClose={() => setShowBulkDeleteConfirm(false)}
-        onConfirm={confirmBulkDelete}
         title="Delete Selected?"
         message={`Are you sure you want to delete ${selectedIds.size} selected note(s)? This cannot be undone.`}
-        confirmLabel={`Delete ${selectedIds.size} Notes`}
+        primaryAction={{
+          label: `Delete ${selectedIds.size} Notes`,
+          handler: confirmBulkDelete,
+          variant: "danger"
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          handler: () => setShowBulkDeleteConfirm(false),
+        }}
       />
 
-      {/* Button Bar (External) */}
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      {/* Button Bar (External) - Shrinks to fit content */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
         <div className="flex gap-2">
           {isSelectionMode ? (
             <Button variant="secondary" onClick={clearSelection} title="Cancel Selection">
@@ -394,168 +473,177 @@ const MyNotes: React.FC = () => {
         </div>
       </div>
 
-      {/* Panel Content */}
-      <Panel
-        title={isSelectionMode ? `${selectedIds.size} Selected` : 'My Notes'}
-        // Usage: Correctly used within the return block
-        headerLeftContent={headerLeftContent}
-      >
-        {statusMessage && (
-          <div className={`mb-2 p-2 rounded border text-sm font-serif ${
-            statusMessage.type === 'success'
-              ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
-              : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-          }`}>
-            <p className="font-bold">{statusMessage.text}</p>
-          </div>
-        )}
+      {/* Panel Wrapper - Takes up all remaining vertical space */}
+      <div className="flex-1 min-h-0">
+        <Panel
+          title={isSelectionMode ? `${selectedIds.size} Selected` : 'My Notes'}
+          headerLeftContent={headerLeftContent}
+        >
+          {/* Panel Body Content - Vertical flex container */}
+          <div className="p-4 flex flex-col h-full">
 
-        {/* Controls Bar */}
-        <div className="flex flex-col gap-2 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2">
-          <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-            {(['ALL', 'ITIN', 'COIN', 'POIN', 'PLIN', 'OTHER'] as FilterType[]).map(ft => (
-              <button
-                key={ft}
-                onClick={() => setFilterType(ft)}
-                disabled={isSelectionMode}
-                className={`px-2 py-1 text-[10px] font-bold rounded-full border whitespace-nowrap transition-colors ${
-                  filterType === ft
-                    ? 'bg-entity-note text-white border-entity-note'
-                    : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
-                } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {ft === 'ALL' ? 'ALL' : ft}
-              </button>
-            ))}
-          </div>
+            {/* Status Message - Shrinks to fit content */}
+            {statusMessage && (
+              <div className={`mb-2 p-2 rounded border text-sm font-serif flex-shrink-0 ${
+                statusMessage.type === 'success'
+                  ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
+                  : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
+              }`}>
+                <p className="font-bold">{statusMessage.text}</p>
+              </div>
+            )}
 
-          <div className="flex justify-between items-center">
+            {/* Controls Bar - Shrinks to fit content */}
+            <div className="flex flex-col gap-2 mb-2 border-b border-gray-200 dark:border-gray-700 pb-2 flex-shrink-0">
+              <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+                {(['ALL', 'ITIN', 'COIN', 'POIN', 'PLIN', 'OTHER'] as FilterType[]).map(ft => (
+                  <button
+                    key={ft}
+                    onClick={() => setFilterType(ft)}
+                    disabled={isSelectionMode}
+                    className={`px-2 py-1 text-[10px] font-bold rounded-full border whitespace-nowrap transition-colors ${
+                      filterType === ft
+                        ? 'bg-entity-note text-white border-entity-note'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
+                    } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {ft === 'ALL' ? 'ALL' : ft}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-between items-center">
                 <span className="font-display font-bold text-gray-700 dark:text-gray-300 text-xs px-2">
                     {filteredAndSortedNotes.length} Found
                 </span>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleSortToggle('DATE')}
-                disabled={isSelectionMode}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                  sortField === 'DATE'
-                    ? 'bg-entity-note/10 text-entity-note border-entity-note/30'
-                    : 'text-gray-500 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
-                } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                <Calendar size={12}/>
-                Date
-                {sortField === 'DATE' && (sortDirection === 'ASC' ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
-              </button>
-              <button
-                onClick={() => handleSortToggle('TITLE')}
-                disabled={isSelectionMode}
-                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
-                  sortField === 'TITLE'
-                    ? 'bg-entity-note/10 text-entity-note border-entity-note/30'
-                    : 'text-gray-500 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
-                } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {sortDirection === 'ASC' ? <ArrowDownAZ size={12}/> : <ArrowUpAZ size={12}/>}
-                Title
-                {sortField === 'TITLE' && (sortDirection === 'ASC' ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {notes.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm">You haven't
-            created any notes yet.</div>
-        ) : filteredAndSortedNotes.length === 0 ? (
-          <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm">No notes match
-            current filter.</div>
-        ) : (
-          <div className="space-y-2 max-h-[70vh] overflow-y-auto p-1">
-            {filteredAndSortedNotes.map(note => {
-              const isSelected = selectedIds.has(note.id);
-              const selectionClass = isSelected
-                ? 'border-entity-note ring-1 ring-entity-note bg-entity-note/10'
-                : `border-l-entity-note border-y border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 ${note.isPinned ? 'dark:bg-gray-700/30 bg-gray-50' : ''}`;
-
-              return (
-                <div key={note.id} className="flex w-full gap-2 relative">
-                  <div
-                    onMouseDown={() => startPress(note.id)}
-                    onMouseUp={cancelPress} // FIX 4: Added onMouseUp handler
-                    onMouseLeave={handleMove}
-                    onTouchStart={() => startPress(note.id)}
-                    onTouchEnd={cancelPress}
-                    onTouchMove={handleMove}
-                    onClick={(e) => handleCardClick(e, note)}
-                    onContextMenu={(e) => e.preventDefault()}
-                    className={`flex-1 flex flex-col gap-0.5 p-2 border-l-4 rounded cursor-pointer transition-all relative overflow-hidden select-none ${selectionClass}`}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleSortToggle('DATE')}
+                    disabled={isSelectionMode}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
+                      sortField === 'DATE'
+                        ? 'bg-entity-note/10 text-entity-note border-entity-note/30'
+                        : 'text-gray-500 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
+                    } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {isSelected && (
-                      <div
-                        className="absolute top-0 right-0 p-1 bg-entity-note text-white rounded-bl-md z-10 shadow-sm">
-                        <Check size={12}/>
-                      </div>
-                    )}
+                    <Calendar size={12}/>
+                    Date
+                    {sortField === 'DATE' && (sortDirection === 'ASC' ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
+                  </button>
+                  <button
+                    onClick={() => handleSortToggle('TITLE')}
+                    disabled={isSelectionMode}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
+                      sortField === 'TITLE'
+                        ? 'bg-entity-note/10 text-entity-note border-entity-note/30'
+                        : 'text-gray-500 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
+                    } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {sortDirection === 'ASC' ? <ArrowDownAZ size={12}/> : <ArrowUpAZ size={12}/>}
+                    Title
+                    {sortField === 'TITLE' && (sortDirection === 'ASC' ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
+                  </button>
+                </div>
+              </div>
+            </div>
 
-                    {!isSelectionMode && (
+            {/* Notes List Container - Takes remaining height and scrolls */}
+            {notes.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm flex-1">You
+                haven't
+                created any notes yet.</div>
+            ) : filteredAndSortedNotes.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm flex-1">No
+                notes match
+                current filter.</div>
+            ) : (
+              <div className="space-y-2 flex-1 min-h-0 overflow-y-auto p-1">
+                {filteredAndSortedNotes.map(note => {
+                  const isSelected = selectedIds.has(note.id);
+                  const selectionClass = isSelected
+                    ? 'border-entity-note ring-1 ring-entity-note bg-entity-note/10'
+                    : `border-l-entity-note border-y border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700/50 ${note.isPinned ? 'dark:bg-gray-700/30 bg-gray-50' : ''}`;
+
+                  return (
+                    <div key={note.id} className="flex w-full gap-2 relative">
                       <div
-                        onClick={(e) => togglePin(e, note)}
-                        className={`absolute top-0 right-0 p-1.5 z-10 transition-colors rounded-bl-md ${note.isPinned ? 'text-entity-note bg-entity-note/10' : 'text-gray-300 hover:text-entity-note dark:text-gray-600 dark:hover:text-entity-note'}`}
-                        title={note.isPinned ? "Unpin" : "Pin"}
+                        onMouseDown={() => startPress(note.id)}
+                        onMouseUp={cancelPress}
+                        onMouseLeave={handleMove}
+                        onTouchStart={() => startPress(note.id)}
+                        onTouchEnd={cancelPress}
+                        onTouchMove={handleMove}
+                        onClick={(e) => handleCardClick(e, note)}
+                        onContextMenu={(e) => e.preventDefault()}
+                        className={`flex-1 flex flex-col gap-0.5 p-2 border-l-4 rounded cursor-pointer transition-all relative overflow-hidden select-none ${selectionClass}`}
                       >
-                        <Pin size={14} fill={note.isPinned ? "currentColor" : "none"}/>
-                      </div>
-                    )}
+                        {isSelected && (
+                          <div
+                            className="absolute top-0 right-0 p-1 bg-entity-note text-white rounded-bl-md z-10 shadow-sm">
+                            <Check size={12}/>
+                          </div>
+                        )}
 
-                    {/* Top Row: Title (Left) + Date (Right) */}
-                    <div className="flex justify-between items-center w-full pr-6">
+                        {!isSelectionMode && (
+                          <div
+                            onClick={(e) => togglePin(e, note)}
+                            className={`absolute top-0 right-0 p-1.5 z-10 transition-colors rounded-bl-md ${note.isPinned ? 'text-entity-note bg-entity-note/10' : 'text-gray-300 hover:text-entity-note dark:text-gray-600 dark:hover:text-entity-note'}`}
+                            title={note.isPinned ? "Unpin" : "Pin"}
+                          >
+                            <Pin size={14} fill={note.isPinned ? "currentColor" : "none"}/>
+                          </div>
+                        )}
+
+                        {/* Top Row: Title (Left) + Date (Right) */}
+                        <div className="flex justify-between items-center w-full pr-6">
                                     <span
                                       className="font-serif font-bold text-gray-800 dark:text-gray-200 text-sm truncate pr-2">
                                     {note.title || 'Untitled'}
                                     </span>
-                      <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500 whitespace-nowrap shrink-0">
                                         {new Date(note.timestamp).toLocaleDateString()}
                                     </span>
-                    </div>
+                        </div>
 
-                    {/* Bottom Row: Linked Objects */}
-                    <div
-                      className={`flex items-center gap-1 h-5 ${isSelectionMode ? 'pointer-events-none opacity-60' : ''}`}>
-                      {note.linkedIds && note.linkedIds.length > 0 ? (
-                        <>
-                          {/* Show only the first linked object */}
-                          {renderLinkBadge(note.linkedIds[0])}
+                        {/* Bottom Row: Linked Objects */}
+                        <div
+                          className={`flex items-center gap-1 h-5 ${isSelectionMode ? 'pointer-events-none opacity-60' : ''}`}>
+                          {note.linkedIds && note.linkedIds.length > 0 ? (
+                            <>
+                              {/* Show only the first linked object */}
+                              {renderLinkBadge(note.linkedIds[0])}
 
-                          {/* Compact Counter if more than 1 */}
-                          {note.linkedIds.length > 1 && (
-                            <span
-                              className="flex items-center justify-center px-1.5 h-full rounded text-[10px] font-mono font-bold bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400">
+                              {/* Compact Counter if more than 1 */}
+                              {note.linkedIds.length > 1 && (
+                                <span
+                                  className="flex items-center justify-center px-1.5 h-full rounded text-[10px] font-mono font-bold bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400">
                                                 +{note.linkedIds.length - 1}
                                                 </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[10px] text-gray-300 dark:text-gray-600 italic">No links</span>
                           )}
-                        </>
-                      ) : (
-                        <span className="text-[10px] text-gray-300 dark:text-gray-600 italic">No links</span>
+                        </div>
+                      </div>
+
+                      {!isSelectionMode && (
+                        <div
+                          onClick={(e) => initiateDelete(e, note)}
+                          className="w-10 flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
+                          title="Delete Note"
+                        >
+                          <Trash2 size={18}/>
+                        </div>
                       )}
                     </div>
-                  </div>
-
-                  {!isSelectionMode && (
-                    <div
-                      onClick={(e) => initiateDelete(e, note)}
-                      className="w-10 flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
-                      title="Delete Note"
-                    >
-                      <Trash2 size={18}/>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </Panel>
+        </Panel>
+      </div>
     </Page>
   );
 };

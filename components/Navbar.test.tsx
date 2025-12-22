@@ -1,6 +1,5 @@
 import { render, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, test, jest, beforeEach } from '@jest/globals';
 import Navbar from './Navbar';
 import { AuthContext, ThemeContext, AppThemeId } from '../App';
 

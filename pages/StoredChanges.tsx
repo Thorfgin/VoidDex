@@ -1,36 +1,56 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+/**
+ * StoredChanges Component
+ *
+ * Displays a list of all locally stored drafts (changes) using offline storage.
+ * Provides functionality to filter, sort, view, pin, and delete individual or bulk drafts.
+ */
+import React, {useState, useEffect, useMemo, useRef} from 'react';
+import {useNavigate} from 'react-router-dom';
 
 // Layout Components
 import Page from '../components/layout/Page';
 import Panel from '../components/layout/Panel';
 
-import { Home, Trash2, ArrowUp, ArrowDown, ArrowUpAZ, ArrowDownAZ, Calendar, X, Check, RefreshCw, Pin, Box, Activity, Zap } from 'lucide-react';
+import {
+  Home,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpAZ,
+  ArrowDownAZ,
+  Calendar,
+  X,
+  Check,
+  RefreshCw,
+  Pin,
+  Box,
+  Activity,
+  Zap,
+  AlertTriangle
+} from 'lucide-react';
 import Button from '../components/ui/Button';
 import ConfirmModal from '../components/ui/ConfirmModal';
-import { getStoredChanges, deleteStoredChange, saveStoredChange, StoredChange } from '../services/offlineStorage';
+import {getStoredChanges, deleteStoredChange, saveStoredChange, StoredChange} from '../services/offlineStorage';
+import ScrollbarHideStyles from '../components/layout/ScrollbarHideStyles';
 
 type FilterType = 'ALL' | 'ITEM' | 'CONDITION' | 'POWER';
 type SortField = 'DATE' | 'TITLE';
 type SortDirection = 'ASC' | 'DESC';
 
+
 const StoredChanges: React.FC = () => {
   const navigate = useNavigate();
   const [changes, setChanges] = useState<StoredChange[]>([]);
-  const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
-  // Single Delete
   const [changeToDelete, setChangeToDelete] = useState<StoredChange | null>(null);
 
-  // Bulk Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScrolling = useRef(false);
-  // REF: Tracks if the long press timer actually fired and initiated selection mode
   const selectionInitiatedRef = useRef(false);
 
-  // Filter & Sort State
   const [filterType, setFilterType] = useState<FilterType>('ALL');
   const [sortField, setSortField] = useState<SortField>('DATE');
   const [sortDirection, setSortDirection] = useState<SortDirection>('DESC');
@@ -39,7 +59,6 @@ const StoredChanges: React.FC = () => {
 
   const loadChanges = () => {
     const data = getStoredChanges();
-    // Ensure valid data
     const validData = data.filter(d => d && d.id && d.data);
     setChanges(validData);
   };
@@ -48,16 +67,13 @@ const StoredChanges: React.FC = () => {
     loadChanges();
   }, []);
 
-  // --- Derived Data ---
   const filteredAndSortedChanges = useMemo(() => {
     let result = [...changes];
 
-    // 1. Filter
     if (filterType !== 'ALL') {
       result = result.filter(c => c.type.toUpperCase() === filterType);
     }
 
-    // 2. Sort
     result.sort((a, b) => {
       // Priority 1: Pinned drafts always at top
       const aPinned = a.isPinned ? 1 : 0;
@@ -88,12 +104,10 @@ const StoredChanges: React.FC = () => {
 
   const togglePin = (e: React.MouseEvent, change: StoredChange) => {
     e.stopPropagation();
-    const updatedChange = { ...change, isPinned: !change.isPinned };
+    const updatedChange = {...change, isPinned: !change.isPinned};
     saveStoredChange(updatedChange);
     loadChanges();
   };
-
-  // --- Deletion Logic ---
 
   const initiateDelete = (e: React.MouseEvent, change: StoredChange) => {
     e.stopPropagation();
@@ -105,7 +119,7 @@ const StoredChanges: React.FC = () => {
       deleteStoredChange(changeToDelete.id);
       loadChanges();
 
-      setStatusMessage({ type: 'success', text: `Draft "${changeToDelete.title}" removed.` });
+      setStatusMessage({type: 'success', text: `Draft "${changeToDelete.title}" removed.`});
       setTimeout(() => setStatusMessage(null), 3000);
       setChangeToDelete(null);
     }
@@ -116,11 +130,9 @@ const StoredChanges: React.FC = () => {
     loadChanges();
     setSelectedIds(new Set());
     setShowBulkDeleteConfirm(false);
-    setStatusMessage({ type: 'success', text: 'Selected drafts removed.' });
+    setStatusMessage({type: 'success', text: 'Selected drafts removed.'});
     setTimeout(() => setStatusMessage(null), 2000);
   };
-
-  // --- Selection Logic ---
 
   const handleSelectionToggle = (id: string) => {
     const newSet = new Set(selectedIds);
@@ -136,11 +148,10 @@ const StoredChanges: React.FC = () => {
     setSelectedIds(new Set());
   };
 
-  // Long Press Handlers
   const startPress = (id: string) => {
     cancelPress();
     isScrolling.current = false;
-    selectionInitiatedRef.current = false; // Reset the flag
+    selectionInitiatedRef.current = false;
 
     longPressTimer.current = setTimeout(() => {
       if (!isScrolling.current) {
@@ -149,7 +160,7 @@ const StoredChanges: React.FC = () => {
         setSelectedIds(newSet);
         if (navigator.vibrate) navigator.vibrate(50);
 
-        selectionInitiatedRef.current = true; // Flag that selection was initiated
+        selectionInitiatedRef.current = true;
         longPressTimer.current = null;
       }
     }, 500);
@@ -172,15 +183,12 @@ const StoredChanges: React.FC = () => {
 
     const wasSelectionInitiated = selectionInitiatedRef.current;
 
-    // 1. If the long press timer *just* fired, swallow this click event
-    // to prevent immediate deselection/toggling. Reset the flag and exit.
     if (wasSelectionInitiated) {
       e.preventDefault();
       selectionInitiatedRef.current = false;
       return;
     }
 
-    // 2. If we are already in selection mode (via a previous action), subsequent clicks toggle.
     if (isSelectionMode) {
       e.preventDefault();
       e.stopPropagation();
@@ -188,7 +196,6 @@ const StoredChanges: React.FC = () => {
       return;
     }
 
-    // 3. If not in selection mode, navigate (the original non-long-press click action).
     let path = '';
     const statePayload: any = {
       draftId: change.id,
@@ -212,14 +219,13 @@ const StoredChanges: React.FC = () => {
     }
 
     if (path) {
-      navigate(path, { state: statePayload });
+      navigate(path, {state: statePayload});
     } else {
-      setStatusMessage({ type: 'error', text: 'Unknown draft type.' });
+      setStatusMessage({type: 'error', text: 'Unknown draft type.'});
       setTimeout(() => setStatusMessage(null), 3000);
     }
   };
 
-  // Helper to extract ID
   const getDraftId = (change: StoredChange): string | null => {
     if (change.type === 'item') {
       return change.data.item?.itin || change.data.itin || null;
@@ -231,41 +237,62 @@ const StoredChanges: React.FC = () => {
     return null;
   };
 
-  // Panel Header Content
   const panelTitle = isSelectionMode ? `${selectedIds.size} Selected` : 'My Stored Changes';
-  const headerLeftContent = isSelectionMode ? null : <RefreshCw size={20} className="text-entity-draft" />;
+  const headerLeftContent = isSelectionMode ? null : <RefreshCw size={20} className="text-entity-draft"/>;
 
 
   return (
     <Page maxWidth="lg">
+      {/* ScrollbarHideStyles is kept here, but the container below now drives the height */}
+      <ScrollbarHideStyles/>
+
       <ConfirmModal
         isOpen={!!changeToDelete}
         onClose={() => setChangeToDelete(null)}
-        onConfirm={confirmDelete}
         title="Remove draft?"
         message={`Are you sure you want to remove the draft "${changeToDelete?.title}"?`}
-        confirmLabel="Remove"
+        icon={AlertTriangle}
+        iconColorClass="text-amber-600 dark:text-amber-500"
+        primaryAction={{
+          label: "Remove",
+          handler: confirmDelete,
+          variant: "danger",
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          handler: () => setChangeToDelete(null),
+        }}
       />
 
       <ConfirmModal
         isOpen={showBulkDeleteConfirm}
         onClose={() => setShowBulkDeleteConfirm(false)}
-        onConfirm={confirmBulkDelete}
         title="Remove Selected?"
         message={`Are you sure you want to remove ${selectedIds.size} selected draft(s)?`}
-        confirmLabel={`Remove ${selectedIds.size} Drafts`}
+        icon={AlertTriangle}
+        iconColorClass="text-amber-600 dark:text-amber-500"
+        primaryAction={{
+          label: `Remove ${selectedIds.size} Drafts`,
+          handler: confirmBulkDelete,
+          variant: "danger",
+        }}
+        secondaryAction={{
+          label: "Cancel",
+          handler: () => setShowBulkDeleteConfirm(false),
+        }}
       />
 
       {/* Toolbar (External to Panel) */}
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-2">
           {isSelectionMode ? (
-            <Button variant="secondary" onClick={clearSelection} title="Cancel Selection">
-              <X size={16} />
+            <Button variant="secondary" onClick={clearSelection} title="Cancel Selection"
+                    data-testid="cancel-selection-button">
+              <X size={16}/>
             </Button>
           ) : (
-            <Button variant="secondary" onClick={() => navigate('/')} title="Dashboard">
-              <Home size={16} />
+            <Button variant="secondary" onClick={() => navigate('/')} title="Dashboard" data-testid="dashboard-button">
+              <Home size={16}/>
             </Button>
           )}
         </div>
@@ -275,12 +302,13 @@ const StoredChanges: React.FC = () => {
               variant="primary"
               onClick={() => setShowBulkDeleteConfirm(true)}
               title="Delete Selected"
+              data-testid="bulk-delete-button"
             >
-              <Trash2 size={16} />
+              <Trash2 size={16}/>
             </Button>
           ) : (
-            <Button variant="secondary" onClick={loadChanges} title="Refresh List">
-              <RefreshCw size={16} />
+            <Button variant="secondary" onClick={loadChanges} title="Refresh List" data-testid="refresh-list-button">
+              <RefreshCw size={16}/>
             </Button>
           )}
         </div>
@@ -296,7 +324,7 @@ const StoredChanges: React.FC = () => {
             statusMessage.type === 'success'
               ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
               : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-          }`}>
+          }`} data-testid="status-message">
             <p className="font-bold">{statusMessage.text}</p>
           </div>
         )}
@@ -307,6 +335,7 @@ const StoredChanges: React.FC = () => {
             {(['ALL', 'ITEM', 'CONDITION', 'POWER'] as FilterType[]).map(ft => (
               <button
                 key={ft}
+                data-testid={`filter-button-${ft.toLowerCase()}`}
                 onClick={() => setFilterType(ft)}
                 disabled={isSelectionMode}
                 className={`px-2 py-1 text-[10px] font-bold rounded-full border whitespace-nowrap transition-colors ${
@@ -328,61 +357,62 @@ const StoredChanges: React.FC = () => {
               <button
                 onClick={() => handleSortToggle('DATE')}
                 disabled={isSelectionMode}
+                data-testid="sort-date-button"
                 className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
                   sortField === 'DATE'
                     ? 'bg-entity-draft/10 text-entity-draft border-entity-draft/30'
                     : 'text-gray-500 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
                 } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <Calendar size={12} />
+                <Calendar size={12}/>
                 Date
-                {sortField === 'DATE' && (sortDirection === 'ASC' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+                {sortField === 'DATE' && (sortDirection === 'ASC' ? <ArrowUp size={10}/> : <ArrowDown size={10}/>)}
               </button>
               <button
                 onClick={() => handleSortToggle('TITLE')}
                 disabled={isSelectionMode}
+                data-testid="sort-title-button"
                 className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold border transition-colors ${
                   sortField === 'TITLE'
                     ? 'bg-entity-draft/10 text-entity-draft border-entity-draft/30'
                     : 'text-gray-500 border-transparent hover:bg-gray-50 dark:hover:bg-gray-700'
                 } ${isSelectionMode ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {sortDirection === 'ASC' ? <ArrowDownAZ size={12} /> : <ArrowUpAZ size={12} />}
+                {/* Note: Icons for title sort direction adjusted for common UX expectation */}
+                {sortField === 'TITLE' && (sortDirection === 'ASC' ? <ArrowUpAZ size={12}/> : <ArrowDownAZ size={12}/>)}
                 Title
-                {sortField === 'TITLE' && (sortDirection === 'ASC' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
               </button>
             </div>
           </div>
         </div>
 
-        <div className="space-y-2 max-h-[70vh] overflow-y-auto p-1">
+        {/* Removed max-h-[70vh] to allow the list to expand fully */}
+        <div className="space-y-2 overflow-y-auto custom-scrollbar p-1">
           {changes.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm">No stored changes found.</div>
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm">No stored
+              changes found.</div>
           ) : filteredAndSortedChanges.length === 0 ? (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm">No drafts match current filter.</div>
+            <div className="p-8 text-center text-gray-500 dark:text-gray-400 font-serif italic text-sm">No drafts match
+              current filter.</div>
           ) : (
             filteredAndSortedChanges.map((change) => {
               const isSelected = selectedIds.has(change.id);
               const draftId = getDraftId(change);
               const typeAcronym = change.type === 'item' ? 'ITIN' : change.type === 'condition' ? 'COIN' : 'POIN';
 
-              // Use entity-draft (blue) for selection state and default borders
               let borderClass = isSelected ? 'border-entity-draft ring-1 ring-entity-draft' : 'border-l-gray-400 border-y border-r border-gray-200 dark:border-gray-700';
               let bgClass = isSelected ? 'bg-entity-draft/10' : 'bg-white dark:bg-gray-800 hover:shadow-sm hover:bg-gray-50 dark:hover:bg-gray-700/50';
 
-              // Badge Styles
               let badgeStyle = '';
               let Icon = Box;
 
               if (change.type === 'item') {
                 badgeStyle = 'bg-entity-item/10 text-entity-item border-entity-item/20';
                 Icon = Box;
-              }
-              else if (change.type === 'condition') {
+              } else if (change.type === 'condition') {
                 badgeStyle = 'bg-entity-condition/10 text-entity-condition border-entity-condition/20';
                 Icon = Activity;
-              }
-              else if (change.type === 'power') {
+              } else if (change.type === 'power') {
                 badgeStyle = 'bg-entity-power/10 text-entity-power border-entity-power/20';
                 Icon = Zap;
               }
@@ -405,21 +435,24 @@ const StoredChanges: React.FC = () => {
                     onTouchMove={handleMove}
                     onClick={(e) => handleItemClick(e, change)}
                     onContextMenu={(e) => e.preventDefault()}
+                    data-testid={`draft-item-${change.id}`}
                     className={`flex-1 flex flex-col gap-1 p-2 border-l-4 rounded cursor-pointer transition-all relative overflow-hidden select-none ${borderClass} ${bgClass}`}
                   >
                     {isSelected && (
-                      <div className="absolute top-0 right-0 p-1 bg-entity-draft text-white rounded-bl-md z-10 shadow-sm">
-                        <Check size={12} />
+                      <div
+                        className="absolute top-0 right-0 p-1 bg-entity-draft text-white rounded-bl-md z-10 shadow-sm">
+                        <Check size={12}/>
                       </div>
                     )}
 
                     {!isSelectionMode && (
                       <div
                         onClick={(e) => togglePin(e, change)}
+                        data-testid={`pin-toggle-${change.id}`}
                         className={`absolute top-0 right-0 p-1.5 z-10 transition-colors rounded-bl-md ${change.isPinned ? 'text-entity-draft bg-entity-draft/10' : 'text-gray-300 hover:text-entity-draft dark:text-gray-600 dark:hover:text-entity-draft'}`}
                         title={change.isPinned ? "Unpin" : "Pin"}
                       >
-                        <Pin size={14} fill={change.isPinned ? "currentColor" : "none"} />
+                        <Pin size={14} fill={change.isPinned ? "currentColor" : "none"}/>
                       </div>
                     )}
 
@@ -428,7 +461,8 @@ const StoredChanges: React.FC = () => {
                       <h4 className="font-serif font-bold text-gray-800 dark:text-gray-100 text-sm truncate pr-2">
                         {change.title}
                       </h4>
-                      <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded bg-white/50 dark:bg-black/20 shrink-0">
+                      <span
+                        className="text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:text-gray-400 border border-gray-200 dark:border-gray-600 px-1.5 py-0.5 rounded bg-white/50 dark:bg-black/20 shrink-0">
                                 {change.action}
                             </span>
                     </div>
@@ -436,8 +470,9 @@ const StoredChanges: React.FC = () => {
                     {/* Bottom Row: ID Badge (Left) | Date (Right) */}
                     <div className="flex justify-between items-end pr-6">
                       {draftId ? (
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${badgeStyle}`}>
-                                    <Icon size={10} strokeWidth={2} />
+                        <span
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold border ${badgeStyle}`}>
+                                    <Icon size={10} strokeWidth={2}/>
                           {typeAcronym} {draftId}
                                 </span>
                       ) : (
@@ -455,10 +490,11 @@ const StoredChanges: React.FC = () => {
                   {!isSelectionMode && (
                     <div
                       onClick={(e) => initiateDelete(e, change)}
+                      data-testid={`delete-draft-button-${change.id}`}
                       className="w-10 flex items-center justify-center bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded cursor-pointer hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 hover:border-red-200 transition-colors"
                       title="Remove"
                     >
-                      <Trash2 size={18} />
+                      <Trash2 size={18}/>
                     </div>
                   )}
                 </div>
