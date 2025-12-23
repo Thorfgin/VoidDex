@@ -32,12 +32,3 @@ body {
 h1, h2, h3, .font-display {
     font-family: var(--font-display), serif;
 }
-
-/* Custom Shape Styling */
-.hexagon-outer {
-    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-}
-
-.hexagon-inner {
-    clip-path: polygon(50% 2%, 98% 26%, 98% 74%, 50% 98%, 2% 74%, 2% 26%);
-}

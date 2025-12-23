@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { searchConditionByCoin, updateCondition, getCharacterName } from '../services/api';
-import { saveStoredChange, deleteStoredChange } from '../services/offlineStorage';
-import { Condition, Assignment } from '../types';
+import React, {useState, useEffect, useRef} from 'react';
+import {useNavigate, useLocation} from 'react-router-dom';
+import {searchConditionByCoin, updateCondition, getCharacterName} from '../services/api';
+import {saveStoredChange, deleteStoredChange} from '../services/offlineStorage';
+import {Condition, Assignment} from '../types';
 
 // IMPORT COMPONENTS
 import Page from '../components/layout/Page';
@@ -10,13 +10,26 @@ import Panel from '../components/layout/Panel';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
 import ConfirmModal from '../components/ui/ConfirmModal';
-import { Search, Home, ArrowLeft, UserMinus, UserPlus, ChevronDown, CheckSquare, Square, X, FileText, AlertTriangle } from 'lucide-react';
+import {
+  Search,
+  Home,
+  ArrowLeft,
+  UserMinus,
+  UserPlus,
+  ChevronDown,
+  CheckSquare,
+  Square,
+  X,
+  FileText,
+  AlertTriangle
+} from 'lucide-react';
 import UserPlusMinus from '../components/icons/UserPlusMinus';
 
 // IMPORT UTILS
-import { getDefaultExpiry, formatDate } from '../utils/dateUtils';
-import { formatPLIN } from '../utils/playerUtils';
+import {getDefaultExpiry, formatDate} from '../utils/dateUtils';
+import {formatPLIN} from '../utils/playerUtils';
 
+/** Configuration type for the confirmation modal. */
 type ModalConfig = {
   isOpen: boolean;
   title: string;
@@ -29,7 +42,7 @@ type ModalConfig = {
 
 /**
  * Component for searching, viewing, and assigning/unassigning players to a Condition (COIN).
- * @returns {React.FC} The AssignCondition component.
+ * @returns The AssignCondition component.
  */
 const AssignCondition: React.FC = () => {
   const navigate = useNavigate();
@@ -130,7 +143,12 @@ const AssignCondition: React.FC = () => {
   useEffect(() => {
     if (location.state) {
       if (location.state.initialData) {
-        const { condition: savedCondition, newOwner: savedNewOwner, newExpiry: savedNewExpiry, selectedRemovePlins: savedRemovePlins } = location.state.initialData;
+        const {
+          condition: savedCondition,
+          newOwner: savedNewOwner,
+          newExpiry: savedNewExpiry,
+          selectedRemovePlins: savedRemovePlins
+        } = location.state.initialData;
         setCondition(savedCondition);
         setCoinSearch(savedCondition.coin);
         setCurrentAssignments(savedCondition.assignments || []);
@@ -182,7 +200,7 @@ const AssignCondition: React.FC = () => {
     setStatusMessage(null);
     setDraftId(null);
     setDraftTimestamp(null);
-    navigate(location.pathname, { replace: true, state: {} });
+    navigate(location.pathname, {replace: true, state: {}});
   };
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -228,7 +246,7 @@ const AssignCondition: React.FC = () => {
       id: id,
       type: 'condition',
       action: 'assign',
-      data: { condition, newOwner, newExpiry, selectedRemovePlins: Array.from(selectedRemovePlins) },
+      data: {condition, newOwner, newExpiry, selectedRemovePlins: Array.from(selectedRemovePlins)},
       timestamp: now,
       title: condition.name || 'Unknown Condition',
       subtitle: `Assign COIN: ${condition.coin}`
@@ -236,7 +254,7 @@ const AssignCondition: React.FC = () => {
     setDraftId(id);
     setDraftTimestamp(now);
     setBaselineJson(getCurrentStateString());
-    setStatusMessage({ type: 'success', text: 'Draft saved successfully.' });
+    setStatusMessage({type: 'success', text: 'Draft saved successfully.'});
     setTimeout(() => {
       setStatusMessage(prev => prev?.text === 'Draft saved successfully.' ? null : prev);
     }, 3000);
@@ -286,13 +304,14 @@ const AssignCondition: React.FC = () => {
 
   const isAllFilteredRemoveSelected = filteredRemoveAssignments.length > 0 && filteredRemoveAssignments.every(a => selectedRemovePlins.has(a.plin));
 
+  /** Executes the API call to add a player and resets the form state on success. */
   const executeAddPlayer = async () => {
     setIsUpdating(true);
     setStatusMessage(null);
 
     try {
-      const updatedAssignments = [...currentAssignments, { plin: newOwner, expiryDate: newExpiry }];
-      const result = await updateCondition(condition!.coin, { assignments: updatedAssignments });
+      const updatedAssignments = [...currentAssignments, {plin: newOwner, expiryDate: newExpiry}];
+      const result = await updateCondition(condition!.coin, {assignments: updatedAssignments});
 
       if (result.success) {
         if (draftId) {
@@ -300,47 +319,52 @@ const AssignCondition: React.FC = () => {
           setDraftId(null);
           setDraftTimestamp(null);
         }
-        setStatusMessage({ type: 'success', text: `Assigned ${newOwner}` });
-        setCondition({ ...condition!, assignments: updatedAssignments });
+        setStatusMessage({type: 'success', text: `Assigned ${newOwner}`});
+        setCondition({...condition!, assignments: updatedAssignments});
         setCurrentAssignments(updatedAssignments);
+
+        // Reset all pending changes and set new baseline
         setNewOwner('');
         setNewExpiry(getDefaultExpiry());
+        setSelectedRemovePlins(new Set()); // FIX: Must clear pending removals too
+        setRemoveFilter('');
         setBaselineJson(JSON.stringify({
           newOwner: '',
           newExpiry: getDefaultExpiry(),
           selectedRemovePlins: []
         }));
       } else {
-        setStatusMessage({ type: 'error', text: 'Failed to assign.' });
+        setStatusMessage({type: 'error', text: 'Failed to assign.'});
       }
     } catch (err) {
-      setStatusMessage({ type: 'error', text: 'Error' });
+      setStatusMessage({type: 'error', text: 'Error'});
     } finally {
       setIsUpdating(false);
     }
   };
 
+  /** Handles validation and submission for adding a player. */
   const handleAddPlayer = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!condition) return;
 
     if (newOwner.trim().length === 0) {
-      setStatusMessage({ type: 'error', text: 'Please enter a Player PLIN.' });
+      setStatusMessage({type: 'error', text: 'Please enter a Player PLIN.'});
       return;
     }
 
-    if (!/^\d{1,4}#\d{1,2}$/.test(newOwner) && newOwner !== 'SYSTEM') {
-      setStatusMessage({ type: 'error', text: 'PLIN format: 1234#12' });
+    if (!/^\d{1,4}#\d{1,2}$/.test(newOwner)) {
+      setStatusMessage({type: 'error', text: 'PLIN format: 1234#12'});
       return;
     }
 
     if (currentAssignments.some(a => a.plin === newOwner)) {
-      setStatusMessage({ type: 'error', text: 'Player is already assigned.' });
+      setStatusMessage({type: 'error', text: 'Player is already assigned.'});
       return;
     }
 
     if (!/^\d{2}\/\d{2}\/\d{4}$/.test(newExpiry) && newExpiry.toLowerCase() !== 'until death') {
-      setStatusMessage({ type: 'error', text: 'Invalid Expiry Date format.' });
+      setStatusMessage({type: 'error', text: 'Invalid Expiry Date format.'});
       return;
     }
 
@@ -351,7 +375,10 @@ const AssignCondition: React.FC = () => {
         message: "The object may have been changed since this draft was stored. Proceed?",
         primaryAction: {
           label: "Process",
-          handler: () => { executeAddPlayer(); closeModal(); },
+          handler: () => {
+            executeAddPlayer();
+            closeModal();
+          },
           variant: "primary",
         },
         icon: FileText,
@@ -363,13 +390,14 @@ const AssignCondition: React.FC = () => {
     await executeAddPlayer();
   };
 
+  /** Executes the API call to remove selected players and resets the form state on success. */
   const executeRemovePlayers = async () => {
     setIsUpdating(true);
     setStatusMessage(null);
 
     try {
       const updatedAssignments = currentAssignments.filter(a => !selectedRemovePlins.has(a.plin));
-      const result = await updateCondition(condition!.coin, { assignments: updatedAssignments });
+      const result = await updateCondition(condition!.coin, {assignments: updatedAssignments});
 
       if (result.success) {
         if (draftId) {
@@ -378,27 +406,32 @@ const AssignCondition: React.FC = () => {
           setDraftTimestamp(null);
         }
         const removedPlinsStr = Array.from(selectedRemovePlins).join(', ');
-        setStatusMessage({ type: 'success', text: `Unassigned: ${removedPlinsStr}` });
-        setCondition({ ...condition!, assignments: updatedAssignments });
+        setStatusMessage({type: 'success', text: `Unassigned: ${removedPlinsStr}`});
+        setCondition({...condition!, assignments: updatedAssignments});
         setCurrentAssignments(updatedAssignments);
+
+        // Reset all pending changes and set new baseline
+        setNewOwner(''); // FIX: Must clear pending addition too
+        setNewExpiry(getDefaultExpiry()); // FIX: Must clear pending expiry too
         setSelectedRemovePlins(new Set());
         setRemoveFilter('');
         setBaselineJson(getCurrentStateString());
       } else {
-        setStatusMessage({ type: 'error', text: 'Failed to unassign.' });
+        setStatusMessage({type: 'error', text: 'Failed to unassign.'});
       }
     } catch (err) {
-      setStatusMessage({ type: 'error', text: 'Error' });
+      setStatusMessage({type: 'error', text: 'Error'});
     } finally {
       setIsUpdating(false);
     }
   };
 
+  /** Handles submission for removing players. */
   const handleRemovePlayers = async () => {
     if (!condition) return;
 
     if (selectedRemovePlins.size === 0) {
-      setStatusMessage({ type: 'error', text: 'Select players to remove.' });
+      setStatusMessage({type: 'error', text: 'Select players to remove.'});
       return;
     }
 
@@ -409,7 +442,10 @@ const AssignCondition: React.FC = () => {
         message: "The object may have been changed since this draft was stored. Proceed?",
         primaryAction: {
           label: "Process",
-          handler: () => { executeRemovePlayers(); closeModal(); },
+          handler: () => {
+            executeRemovePlayers();
+            closeModal();
+          },
           variant: "primary",
         },
         icon: FileText,
@@ -421,6 +457,7 @@ const AssignCondition: React.FC = () => {
     await executeRemovePlayers();
   };
 
+  /** Gets a newline-separated string of current assignments for display. */
   const getAssignedPlayersDisplay = () => {
     if (currentAssignments.length === 0) return 'None';
     return currentAssignments.map(a => {
@@ -429,7 +466,7 @@ const AssignCondition: React.FC = () => {
     }).join('\n');
   }
 
-  const headerLeftContent = (<UserPlusMinus size={20} className="text-entity-condition" />);
+  const headerLeftContent = (<UserPlusMinus size={20} className="text-entity-condition"/>);
   const headerRightContent = (
     draftId && draftTimestamp ? (
       <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0" data-testid="draft-timestamp-display">
@@ -465,7 +502,7 @@ const AssignCondition: React.FC = () => {
               title="Back"
               data-testid="back-button"
             >
-              <ArrowLeft size={16} />
+              <ArrowLeft size={16}/>
             </Button>
           )}
           <Button
@@ -475,7 +512,7 @@ const AssignCondition: React.FC = () => {
             title="Dashboard"
             data-testid="home-button"
           >
-            <Home size={16} />
+            <Home size={16}/>
           </Button>
           <Button
             variant="secondary"
@@ -484,7 +521,7 @@ const AssignCondition: React.FC = () => {
             title="New Search"
             data-testid="new-search-button"
           >
-            <Search size={16} />
+            <Search size={16}/>
           </Button>
         </div>
       </div>
@@ -497,7 +534,8 @@ const AssignCondition: React.FC = () => {
       >
         <div className="p-4">
           {!condition && (
-            <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto" data-testid="coin-search-form">
+            <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto"
+                  data-testid="coin-search-form">
               <Input
                 label="Enter COIN"
                 id="coinSearchInput"
@@ -514,10 +552,11 @@ const AssignCondition: React.FC = () => {
               />
               <div className="flex justify-end">
                 <Button type="submit" isLoading={isSearching} disabled={!coinSearch} data-testid="find-coin-button">
-                  <Search size={16} className="mr-2" /> Find
+                  <Search size={16} className="mr-2"/> Find
                 </Button>
               </div>
-              {searchError && <span data-testid="search-error-message" className="text-red-500 text-sm">{searchError}</span>}
+              {searchError &&
+                <span data-testid="search-error-message" className="text-red-500 text-sm">{searchError}</span>}
             </form>
           )}
           {condition && (
@@ -537,7 +576,9 @@ const AssignCondition: React.FC = () => {
 
               <div className="flex gap-2">
                 <div className="w-20 shrink-0">
-                  <Input label="COIN" id="conditionCoin" value={condition.coin} readOnly className="font-mono bg-entity-condition/10 text-entity-condition h-[38px]" data-testid="condition-coin-display" />
+                  <Input label="COIN" id="conditionCoin" value={condition.coin} readOnly
+                         className="font-mono bg-entity-condition/10 text-entity-condition h-[38px]"
+                         data-testid="condition-coin-display"/>
                 </div>
                 <div className="flex-1 min-w-0">
                   <Input
@@ -552,14 +593,20 @@ const AssignCondition: React.FC = () => {
                 </div>
               </div>
 
-              <Input label="Name" id="conditionName" value={condition.name} readOnly data-testid="condition-name-display" />
-              <Input label="Description" id="conditionDescription" value={condition.description} readOnly multiline rows={3} data-testid="condition-description-display" />
+              <Input label="Name" id="conditionName" value={condition.name} readOnly
+                     data-testid="condition-name-display"/>
+              <Input label="Description" id="conditionDescription" value={condition.description} readOnly multiline
+                     rows={3} data-testid="condition-description-display"/>
 
               <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-4">
 
-                  <div className="p-4 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30" data-testid="add-player-panel">
-                    <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-2 items-center gap-2">
+                  {/* Add Player Panel */}
+                  <div
+                    className="p-4 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30"
+                    data-testid="add-player-panel">
+                    <label
+                      className="flex text-sm font-bold text-gray-800 dark:text-gray-200 font-serif mb-2 items-center gap-2">
                       <UserPlus size={16} className="text-blue-600 dark:text-blue-400"/>
                       Add Player
                     </label>
@@ -585,24 +632,33 @@ const AssignCondition: React.FC = () => {
                           placeholder="dd/mm/yyyy"
                           data-testid="add-player-expiry-input"
                         />
-                        <Button type="submit" isLoading={isUpdating} className="w-24 h-[38px]" disabled={!condition || isUpdating || newOwner.length === 0} data-testid="assign-button">Assign</Button>
+                        <Button type="submit" isLoading={isUpdating} className="w-24 h-[38px]"
+                                disabled={!condition || isUpdating || newOwner.length === 0}
+                                data-testid="assign-button">Assign</Button>
                       </div>
                     </form>
                     {newOwnerName && (
-                      <div className="text-xs font-bold text-blue-600 dark:text-blue-400 pl-1" data-testid="new-owner-name-display">
+                      <div className="text-xs font-bold text-blue-600 dark:text-blue-400 pl-1"
+                           data-testid="new-owner-name-display">
                         {newOwnerName}
                       </div>
                     )}
                   </div>
 
-                  <div className="p-4 rounded-lg bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 relative" ref={removeDropdownRef} data-testid="remove-player-panel">
+                  {/* Remove Player Panel */}
+                  <div
+                    className="p-4 rounded-lg bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 relative"
+                    ref={removeDropdownRef} data-testid="remove-player-panel">
                     <div className="flex justify-between items-center mb-1.5">
-                      <label className="block text-sm font-bold text-gray-800 dark:text-gray-200 font-serif items-center gap-2">
+                      <label
+                        className="flex text-sm font-bold text-gray-800 dark:text-gray-200 font-serif items-center gap-2">
                         <UserMinus size={16} className="text-red-600 dark:text-red-400"/>
                         Remove Players
                       </label>
                       {selectedRemovePlins.size > 0 && (
-                        <span className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 px-2 py-0.5 rounded-full" data-testid="selected-removals-count">
+                        <span
+                          className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/50 px-2 py-0.5 rounded-full"
+                          data-testid="selected-removals-count">
                                       {selectedRemovePlins.size} Selected
                                   </span>
                       )}
@@ -638,18 +694,20 @@ const AssignCondition: React.FC = () => {
                           }}
                           data-testid="remove-filter-clear-toggle-button"
                         >
-                          {removeFilter ? <X size={16} /> : <ChevronDown size={16} />}
+                          {removeFilter ? <X size={16}/> : <ChevronDown size={16}/>}
                         </div>
                       </div>
 
                       {showRemoveDropdown && currentAssignments.length > 0 && (
-                        <div className="absolute bottom-full mb-1 z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto" data-testid="remove-player-dropdown-menu">
+                        <div
+                          className="absolute bottom-full mb-1 z-10 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded shadow-lg max-h-60 overflow-y-auto"
+                          data-testid="remove-player-dropdown-menu">
                           <div
                             className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 cursor-pointer text-xs font-bold text-gray-600 dark:text-gray-300 flex items-center gap-2 sticky top-0 z-20"
                             onClick={toggleSelectFilteredRemove}
                             data-testid="select-all-filtered-button"
                           >
-                            {isAllFilteredRemoveSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                            {isAllFilteredRemoveSelected ? <CheckSquare size={14}/> : <Square size={14}/>}
                             {isAllFilteredRemoveSelected ? "Deselect All" : "Select All"}
                           </div>
 
@@ -664,18 +722,21 @@ const AssignCondition: React.FC = () => {
                                   data-testid={`remove-item-${a.plin}`}
                                 >
                                   <div className={isSelected ? "text-red-600 dark:text-red-400" : "text-gray-400"}>
-                                    {isSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                                    {isSelected ? <CheckSquare size={16}/> : <Square size={16}/>}
                                   </div>
                                   <div className="flex-1">
-                                    <span className="font-mono font-bold text-gray-700 dark:text-gray-300">{a.plin}</span>
+                                    <span
+                                      className="font-mono font-bold text-gray-700 dark:text-gray-300">{a.plin}</span>
                                     <span className="ml-2 text-xs text-gray-500">Exp: {a.expiryDate}</span>
-                                    {getCharacterName(a.plin) && <div className="text-xs text-gray-500 truncate" data-testid={`remove-item-name-${a.plin}`}>{getCharacterName(a.plin)}</div>}
+                                    {getCharacterName(a.plin) && <div className="text-xs text-gray-500 truncate"
+                                                                      data-testid={`remove-item-name-${a.plin}`}>{getCharacterName(a.plin)}</div>}
                                   </div>
                                 </div>
                               );
                             })
                           ) : (
-                            <div className="px-3 py-2 text-sm text-gray-500 italic text-center" data-testid="no-matches-found">No matches found</div>
+                            <div className="px-3 py-2 text-sm text-gray-500 italic text-center"
+                                 data-testid="no-matches-found">No matches found</div>
                           )}
                         </div>
                       )}
@@ -707,7 +768,7 @@ const AssignCondition: React.FC = () => {
                     title="Save the current assignment and removal changes as a local draft"
                     data-testid="save-draft-button"
                   >
-                    <FileText size={16} className="mr-2" /> Save Draft
+                    <FileText size={16} className="mr-2"/> Save Draft
                   </Button>
                   <span data-testid="is-unsaved-status" className="sr-only">{isUnsaved ? "Unsaved" : "Saved"}</span>
                 </div>

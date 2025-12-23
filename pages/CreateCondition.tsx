@@ -289,7 +289,7 @@ const CreateCondition: React.FC = () => {
     const { name, description, owner, expiryDate } = formData;
     if (!name.trim()) return "Name is required.";
     if (!description.trim()) return "Description is required.";
-    if (!/^\d{1,4}#\d{1,2}$/.test(owner) && owner !== 'SYSTEM' && owner !== '') return "Player must be format 1234#12";
+    if (!/^\d{1,4}#\d{1,2}$/.test(owner) && owner !== '') return "Player must be format 1234#12";
     if (expiryDate.trim() !== '' && expiryDate.toLowerCase() !== 'until death') {
       if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) return "Expiry Date must be DD/MM/YYYY or 'until death'";
     }

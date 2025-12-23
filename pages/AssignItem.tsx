@@ -282,6 +282,10 @@ const AssignItem: React.FC = () => {
     executeUpdate().then();
   };
 
+  /**
+   * Generates the display value for the owner input, combining PLIN and Character Name.
+   * @returns The formatted owner string (e.g., "1234#12 (John Doe)") or just the PLIN.
+   */
   const getDisplayValue = () => {
     if (characterName) {
       return `${owner} (${characterName})`;
@@ -295,7 +299,7 @@ const AssignItem: React.FC = () => {
 
   const headerRightContent = (
     draftId && draftTimestamp ? (
-      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+      <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0" data-testid="draft-timestamp-display">
              <span className="font-bold">(Draft)</span> {new Date(draftTimestamp).toLocaleDateString()}
           </span>
     ) : null
@@ -305,7 +309,7 @@ const AssignItem: React.FC = () => {
 
   // --- Render (Wrapped in Page and Panel) ---
   return (
-    <Page maxWidth="lg">
+    <Page maxWidth="lg" data-testid="assign-item-page">
 
       {/* UPDATED: Generic Modal Rendering */}
       {modalConfig && (
@@ -318,6 +322,7 @@ const AssignItem: React.FC = () => {
           secondaryAction={modalConfig.secondaryAction}
           icon={modalConfig.icon}
           iconColorClass={modalConfig.iconColorClass}
+          data-testid="generic-confirm-modal"
         />
       )}
 
@@ -327,17 +332,19 @@ const AssignItem: React.FC = () => {
           {/* Back Button */}
           {(returnQuery || returnTo) && (
             <Button variant="secondary" type="button"
-                    onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back">
+                    onClick={() => confirmAction(() => navigate(returnTo || `/?${returnQuery}`))} title="Back"
+                    data-testid="back-button">
               <ArrowLeft size={16} className="mr-2"/> Back
             </Button>
           )}
           {/* Home Button */}
           <Button variant="secondary" type="button" onClick={() => confirmAction(() => navigate('/'))}
-                  title="Dashboard">
+                  title="Dashboard" data-testid="home-button">
             <Home size={16}/>
           </Button>
           {/* New Search Button */}
-          <Button variant="secondary" type="button" onClick={() => confirmAction(handleResetSearch)} title="New Search">
+          <Button variant="secondary" type="button" onClick={() => confirmAction(handleResetSearch)}
+                  title="New Search" data-testid="new-search-button">
             <Search size={16}/>
           </Button>
         </div>
@@ -349,12 +356,16 @@ const AssignItem: React.FC = () => {
         title={title}
         headerLeftContent={headerLeftContent}
         headerRightContent={headerRightContent}
+        data-testid="assignment-panel"
       >
         <div className="p-4">
           {!item && (
-            <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto">
+            <form onSubmit={handleSearch} className="flex flex-col gap-2 max-w-sm mx-auto"
+                  data-testid="item-search-form">
               <Input
                 label="Enter ITIN"
+                id="itinSearchInput"
+                data-testid="itin-search-input"
                 value={itinSearch}
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, '').slice(0, 4);
@@ -366,18 +377,20 @@ const AssignItem: React.FC = () => {
                 inputMode="numeric"
               />
               <div className="flex justify-end">
-                <Button type="submit" isLoading={isSearching} disabled={!itinSearch}>
+                <Button type="submit" isLoading={isSearching} disabled={!itinSearch} data-testid="find-item-button">
                   <Search size={16} className="mr-2"/> Find
                 </Button>
               </div>
+              {searchError && <span data-testid="search-error-message" className="text-red-500 text-sm">{searchError}</span>}
             </form>
           )}
 
           {item && (
-            <div className="space-y-2 animation-fade-in">
+            <div className="space-y-2 animation-fade-in" data-testid="item-details-view">
               {confirmUnassign && (
                 <div
-                  className="p-2 bg-yellow-50 border border-yellow-300 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-300 rounded flex items-center gap-2 text-sm">
+                  className="p-2 bg-yellow-50 border border-yellow-300 text-yellow-800 dark:bg-yellow-900/30 dark:border-yellow-800 dark:text-yellow-300 rounded flex items-center gap-2 text-sm"
+                  data-testid="unassign-confirmation-message">
                   <AlertTriangle size={16}/>
                   <span>Are you sure you want to remove the player? **Click Assign/Unassign again to confirm.**</span>
                 </div>
@@ -387,18 +400,27 @@ const AssignItem: React.FC = () => {
                   statusMessage.type === 'success'
                     ? 'bg-green-50 border-green-300 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300'
                     : 'bg-red-50 border-red-300 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-                }`}>
+                }`} data-testid={`status-message-${statusMessage.type}`}>
                   {statusMessage.text}
                 </div>
               )}
 
               <div className="flex gap-2">
                 <div className="w-20 shrink-0">
-                  <Input label="ITIN" value={item.itin} readOnly className="font-mono bg-gray-50"/>
+                  <Input
+                    label="ITIN"
+                    id="itemItinDisplay"
+                    data-testid="item-itin-display"
+                    value={item.itin}
+                    readOnly
+                    className="font-mono bg-gray-50"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <Input
                     label="Player (PLIN)"
+                    id="ownerPlinInput"
+                    data-testid="owner-plin-input"
                     value={getDisplayValue()}
                     onChange={handleOwnerChange}
                     readOnly={isSuccess}
@@ -408,14 +430,18 @@ const AssignItem: React.FC = () => {
                 </div>
               </div>
 
-              <Input label="Name" value={item.name} readOnly/>
-              <Input label="Description" value={item.description} readOnly multiline rows={3}/>
-              <Input label="Remarks" value={item.remarks || ''} readOnly multiline rows={3}/>
-              <Input label="CS Remarks" value={item.csRemarks || ''} readOnly multiline rows={3}/>
+              <Input label="Name" id="itemNameDisplay" data-testid="item-name-display" value={item.name} readOnly/>
+              <Input label="Description" id="itemDescriptionDisplay" data-testid="item-description-display"
+                     value={item.description} readOnly multiline rows={3}/>
+              <Input label="Remarks" id="itemRemarksDisplay" data-testid="item-remarks-display"
+                     value={item.remarks || ''} readOnly multiline rows={3}/>
+              <Input label="CS Remarks" id="itemCsRemarksDisplay" data-testid="item-cs-remarks-display"
+                     value={item.csRemarks || ''} readOnly multiline rows={3}/>
 
               {!isSuccess && (
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-                  <Button variant="secondary" type="button" onClick={handleSaveDraft} disabled={!isUnsaved}>
+                  <Button variant="secondary" type="button" onClick={handleSaveDraft} disabled={!isUnsaved}
+                          data-testid="save-draft-button">
                     <FileText size={16} className="mr-2"/> Save Draft
                   </Button>
                   <Button
@@ -424,6 +450,7 @@ const AssignItem: React.FC = () => {
                     isLoading={isUpdating}
                     variant={confirmUnassign ? 'danger' : 'primary'}
                     disabled={!isUnsaved && !confirmUnassign}
+                    data-testid="assign-unassign-button"
                   >
                     <Save size={16} className="mr-2"/>
                     {confirmUnassign ? 'Confirm Unassign' : (owner.trim() ? 'Assign' : 'Unassign')}

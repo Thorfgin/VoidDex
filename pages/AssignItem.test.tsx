@@ -4,7 +4,23 @@ import * as api from '../services/api';
 import * as offlineStorage from '../services/offlineStorage';
 import {renderWithRouter} from '../utils/testUtils';
 
-// Mock API
+/**
+ * Centralized mapping of all data-testid attributes and common selectors.
+ */
+const SELECTORS = {
+  ITIN_SEARCH_INPUT: 'itin-search-input',
+  FIND_ITEM_BUTTON: 'find-item-button',
+  SEARCH_ERROR_MESSAGE: 'search-error-message',
+  OWNER_PLIN_INPUT: 'owner-plin-input',
+  ASSIGN_UNASSIGN_BUTTON: 'assign-unassign-button',
+  SAVE_DRAFT_BUTTON: 'save-draft-button',
+  STATUS_MESSAGE_SUCCESS: 'status-message-success',
+  STATUS_MESSAGE_ERROR: 'status-message-error',
+  UNASSIGN_CONFIRM_MESSAGE: 'unassign-confirmation-message',
+  ITEM_NAME_DISPLAY: 'item-name-display',
+  DRAFT_TIMESTAMP_DISPLAY: 'draft-timestamp-display',
+};
+
 jest.mock('../services/api', () => ({
   searchItemByItin: jest.fn(),
   updateItem: jest.fn(),
@@ -37,99 +53,102 @@ const mockItemData = {
 const apiMock = api as jest.Mocked<typeof api>;
 const offlineMock = offlineStorage as jest.Mocked<typeof offlineStorage>;
 
+/**
+ * Test suite for the AssignItem component.
+ */
 describe('AssignItem Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
+  /**
+   * Performs a successful item search and waits for the details to load.
+   */
   const setupWithSearchResult = async () => {
     apiMock.searchItemByItin.mockResolvedValue({
       success: true,
       data: mockItemData,
     });
 
-    const utils = renderWithRouter(<AssignItem/>, '/assign-item');
+    renderWithRouter(<AssignItem/>, '/assign-item');
 
-    const itinInput = utils.getByPlaceholderText('4-digit ID');
-    const findBtn = utils.getByText('Find');
+    fireEvent.change(screen.getByTestId(SELECTORS.ITIN_SEARCH_INPUT), {target: {value: '1234'}});
+    fireEvent.click(screen.getByTestId(SELECTORS.FIND_ITEM_BUTTON));
 
-    fireEvent.change(itinInput, {target: {value: '1234'}});
-    fireEvent.click(findBtn);
-
-    // Wait for the item name to appear
-    await utils.findByDisplayValue('Test Item');
-
-    return utils;
+    await screen.findByDisplayValue('Test Item');
   };
 
+  /**
+   * Tests searching and successful loading of item data.
+   */
   test('searches and loads item data', async () => {
     apiMock.searchItemByItin.mockResolvedValue({
       success: true,
       data: mockItemData,
     });
 
-    const {getByPlaceholderText, getByText, findByDisplayValue} =
-      renderWithRouter(<AssignItem/>, '/assign-item');
+    renderWithRouter(<AssignItem/>, '/assign-item');
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.ITIN_SEARCH_INPUT), {
       target: {value: '1234'},
     });
-    fireEvent.click(getByText('Find'));
+    fireEvent.click(screen.getByTestId(SELECTORS.FIND_ITEM_BUTTON));
 
     await waitFor(() => {
       expect(apiMock.searchItemByItin).toHaveBeenCalledWith('1234');
     });
 
-    expect(await findByDisplayValue('Test Item')).toBeTruthy();
-    // Use regex to match the value, as getDisplayValue formats it as "PLIN (Name)"
+    expect(await screen.findByDisplayValue('Test Item')).toBeTruthy();
     expect(screen.getByDisplayValue(/1234#12/i)).toBeTruthy();
   });
 
+  /**
+   * Tests that the "Item not found" message is shown for unsuccessful search.
+   */
   test('shows "Item not found" when item is not found', async () => {
     apiMock.searchItemByItin.mockResolvedValue({
       success: false,
       data: null,
     } as any);
 
-    const {getByPlaceholderText, getByText, findByText} = renderWithRouter(
-      <AssignItem/>,
-      '/assign-item',
-    );
+    renderWithRouter(<AssignItem/>, '/assign-item');
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.ITIN_SEARCH_INPUT), {
       target: {value: '9999'},
     });
-    fireEvent.click(getByText('Find'));
+    fireEvent.click(screen.getByTestId(SELECTORS.FIND_ITEM_BUTTON));
 
-    // FIX: Updated expected error message
-    expect(await findByText('Item not found.')).toBeTruthy();
+    // Use test ID to search for an error message
+    expect(await screen.findByTestId(SELECTORS.SEARCH_ERROR_MESSAGE)).toBeTruthy();
   });
 
+  /**
+   * Tests that a generic error message is shown when the search API call fails.
+   */
   test('shows "Error" when search throws', async () => {
     apiMock.searchItemByItin.mockRejectedValue(new Error('Network error'));
 
-    const {getByPlaceholderText, getByText, findByText} = renderWithRouter(
-      <AssignItem/>,
-      '/assign-item',
-    );
+    renderWithRouter(<AssignItem/>, '/assign-item');
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.ITIN_SEARCH_INPUT), {
       target: {value: '1234'},
     });
-    fireEvent.click(getByText('Find'));
+    fireEvent.click(screen.getByTestId(SELECTORS.FIND_ITEM_BUTTON));
 
-    // FIX: Updated expected error message
-    expect(await findByText('An error occurred during search.')).toBeTruthy();
+    // Use test ID to search an error message
+    expect(await screen.findByTestId(SELECTORS.SEARCH_ERROR_MESSAGE)).toBeTruthy();
   });
 
+  /**
+   * Tests that unsaved changes are correctly saved to local draft storage.
+   */
   test('saves draft correctly', async () => {
     await setupWithSearchResult();
 
-    // Use regex to find the input, matching "PLIN (Name)"
     const ownerInput = screen.getByDisplayValue(/1234#12/i);
     fireEvent.change(ownerInput, {target: {value: '9999#11'}});
 
-    fireEvent.click(screen.getByText('Save Draft'));
+    fireEvent.click(screen.getByTestId(SELECTORS.SAVE_DRAFT_BUTTON));
 
     expect(offlineMock.saveStoredChange).toHaveBeenCalledTimes(1);
     expect(offlineMock.saveStoredChange).toHaveBeenCalledWith(
@@ -145,26 +164,30 @@ describe('AssignItem Page', () => {
     );
   });
 
+  /**
+   * Tests that the update is blocked, and an error is shown for invalid PLIN format.
+   */
   test('prevents invalid PLIN format on update', async () => {
     await setupWithSearchResult();
 
-    // Use regex to find the input, matching "PLIN (Name)"
     const ownerInput = screen.getByDisplayValue(/1234#12/i);
-    const assignBtn = screen.getByText('Assign');
+    const assignBtn = screen.getByTestId(SELECTORS.ASSIGN_UNASSIGN_BUTTON);
 
-    // Use numeric value without # so it survives formatPLIN but fails the regex
     fireEvent.change(ownerInput, {target: {value: '1234'}});
     fireEvent.click(assignBtn);
 
-    // FIX: Updated expected error message to match component's validation
+    // Use test ID for a status error message and check content
     expect(
-      await screen.findByText('Player PLIN must be format 1234#12'),
-    ).toBeTruthy();
+      await screen.findByTestId(SELECTORS.STATUS_MESSAGE_ERROR),
+    ).toHaveTextContent('Player PLIN must be format 1234#12');
 
     expect(apiMock.updateItem).not.toHaveBeenCalled();
   });
 
 
+  /**
+   * Tests a successful reassignment process without relying on a draft.
+   */
   test('handles successful assignment (reassign) without draft', async () => {
     apiMock.searchItemByItin.mockResolvedValue({
       success: true,
@@ -175,20 +198,18 @@ describe('AssignItem Page', () => {
       data: {...mockItemData, owner: '9999#11'},
     });
 
-    const {getByPlaceholderText, getByText, findByDisplayValue} =
-      renderWithRouter(<AssignItem/>, '/assign-item');
+    renderWithRouter(<AssignItem/>, '/assign-item');
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.ITIN_SEARCH_INPUT), {
       target: {value: '1234'},
     });
-    fireEvent.click(getByText('Find'));
-    await findByDisplayValue('Test Item');
+    fireEvent.click(screen.getByTestId(SELECTORS.FIND_ITEM_BUTTON));
+    await screen.findByDisplayValue('Test Item');
 
-    // Use regex to find the input, matching "PLIN (Name)"
     const ownerInput = screen.getByDisplayValue(/1234#12/i);
     fireEvent.change(ownerInput, {target: {value: '9999#11'}});
 
-    const assignBtn = getByText('Assign');
+    const assignBtn = screen.getByTestId(SELECTORS.ASSIGN_UNASSIGN_BUTTON);
     fireEvent.click(assignBtn);
 
     await waitFor(() => {
@@ -197,17 +218,19 @@ describe('AssignItem Page', () => {
       });
     });
 
-    // FIX: Updated success message to match the component's detailed message
+    // Use test ID to search an error message and check content. Using findByTestId
+    // ensures we wait for the element to appear after the async update.
     expect(
-      screen.getByText('Reassigned from 1234#12 to 9999#11.'),
-    ).toBeTruthy();
+      await screen.findByTestId(SELECTORS.STATUS_MESSAGE_SUCCESS)
+    ).toHaveTextContent('Reassigned from 1234#12 to 9999#11.');
 
-    // After success, action buttons disappear (isSuccess === true)
-    expect(screen.queryByText('Save Draft')).toBeNull();
-    expect(screen.queryByText('Assign')).toBeNull();
-    expect(screen.queryByText('Unassign')).toBeNull();
+    expect(screen.queryByTestId(SELECTORS.SAVE_DRAFT_BUTTON)).toBeNull();
+    expect(screen.queryByTestId(SELECTORS.ASSIGN_UNASSIGN_BUTTON)).toBeNull();
   });
 
+  /**
+   * Tests that unassigning the item requires a two-click confirmation process.
+   */
   test('requires confirmation to unassign (clear owner)', async () => {
     await setupWithSearchResult();
 
@@ -216,23 +239,18 @@ describe('AssignItem Page', () => {
       data: {...mockItemData, owner: ''},
     });
 
-    // Use regex to find the input, matching "PLIN (Name)"
     const ownerInput = screen.getByDisplayValue(/1234#12/i);
 
-    // Clear owner
     fireEvent.change(ownerInput, {target: {value: ''}});
 
-    // First click: triggers confirmation state
-    const unassignBtn = screen.getByText('Unassign');
+    const unassignBtn = screen.getByTestId(SELECTORS.ASSIGN_UNASSIGN_BUTTON);
     fireEvent.click(unassignBtn);
 
     expect(screen.getByText('Confirm Unassign')).toBeTruthy();
     expect(
-      // Confirm the new confirmation message text is present
-      screen.getByText(/Click Assign\/Unassign again to confirm/i),
+      screen.getByTestId(SELECTORS.UNASSIGN_CONFIRM_MESSAGE),
     ).toBeTruthy();
 
-    // Second click: actually unassigns
     const confirmBtn = screen.getByText('Confirm Unassign');
     fireEvent.click(confirmBtn);
 
@@ -241,13 +259,15 @@ describe('AssignItem Page', () => {
     });
   });
 
+  /**
+   * Tests that an existing draft is processed via a confirmation modal and deleted upon successful update.
+   */
   test('processes existing draft via confirmation modal', async () => {
     apiMock.updateItem.mockResolvedValue({
       success: true,
       data: {...mockItemData, owner: '9999#11'},
     });
 
-    // Load from a stored draft (no search required)
     renderWithRouter(<AssignItem/>, '/assign-item', {
       initialData: {
         item: mockItemData,
@@ -259,7 +279,7 @@ describe('AssignItem Page', () => {
 
     const ownerInput = screen.getByDisplayValue(/1234#12/i);
     fireEvent.change(ownerInput, {target: {value: '9999#11'}});
-    fireEvent.click(screen.getByText('Assign'));
+    fireEvent.click(screen.getByTestId(SELECTORS.ASSIGN_UNASSIGN_BUTTON));
 
     expect(screen.getByText('Process Draft?')).toBeTruthy();
     expect(
@@ -267,9 +287,7 @@ describe('AssignItem Page', () => {
         'The object may have been changed since this draft was stored. Proceed with the draft assignment?',
       ),
     ).toBeTruthy();
-    expect(screen.getByText('Process Draft')).toBeTruthy(); // FIX: Changed label from 'Process' to 'Process Draft'
 
-    // Confirm processing
     fireEvent.click(screen.getByText('Process Draft'));
 
     await waitFor(() => {

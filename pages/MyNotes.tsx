@@ -298,7 +298,7 @@ const MyNotes: React.FC = () => {
     const {type, id} = parseLinkId(linkStr);
 
     if (type === 'OTHER') {
-      navigator.clipboard.writeText(id);
+      await navigator.clipboard.writeText(id);
       setStatusMessage({type: 'success', text: 'Copied to clipboard'});
       setTimeout(() => setStatusMessage(null), 1500);
       return;

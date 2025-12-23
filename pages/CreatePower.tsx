@@ -273,8 +273,8 @@ const CreatePower: React.FC = () => {
     if (!name.trim()) return "Name is required.";
     if (!description.trim()) return "Description is required.";
     const validPlinRegex = /^\d{4}#\d{1,2}$/;
-    if (owner.trim() !== '' && owner.trim() !== 'SYSTEM' && !validPlinRegex.test(owner)) {
-      return "Player must be format 1234#12 or 'SYSTEM'";
+    if (owner.trim() !== '' && !validPlinRegex.test(owner)) {
+      return "Player must be format 1234#12'";
     }
     if (expiryDate.trim() !== '' && expiryDate.toLowerCase() !== 'until death') {
       if (!/^\d{2}\/\d{2}\/\d{4}$/.test(expiryDate)) return "Expiry Date must be DD/MM/YYYY or 'until death'";

@@ -4,7 +4,26 @@ import * as api from '../services/api';
 import * as offlineStorage from '../services/offlineStorage';
 import {renderWithRouter} from '../utils/testUtils';
 
-// --- Mocks ---
+/**
+ * Defines the Test IDs used for selecting elements in the AssignPower component.
+ * NOTE: These selectors are updated to match the data-testid attributes in AssignPower.tsx.
+ */
+const SELECTORS = {
+  SEARCH_POIN_INPUT: 'input-poin-search', // Was 'search-poin-input'
+  SEARCH_BUTTON: 'btn-find-power',       // Was 'search-button'
+  POWER_NAME_DISPLAY: 'display-name',     // Was 'power-name-display'
+  POWER_DESCRIPTION_DISPLAY: 'display-description', // Was 'power-description-display'
+  ASSIGN_BUTTON: 'btn-assign-player',     // Was 'assign-button'
+  NEW_PLIN_INPUT: 'input-new-owner-plin', // Was 'new-plin-input'
+  NEW_EXPIRY_INPUT: 'input-new-owner-expiry', // Was 'new-expiry-input'
+  REMOVE_FILTER_INPUT: 'input-remove-filter', // Was 'remove-filter-input'
+  REMOVE_SELECT_ALL_BUTTON: 'btn-toggle-select-all-filtered', // Was 'remove-select-all-button'
+  REMOVE_SELECTED_BUTTON: 'btn-remove-selected', // Was 'remove-selected-button'
+  SAVE_DRAFT_BUTTON: 'btn-save-draft',    // Was 'save-draft-button'
+  DRAFT_PROCESS_BUTTON: 'draft-process-button', // Still unused, keeping key
+  STATUS_MESSAGE: 'status-message',
+  DRAFT_STATUS: 'draft-info',             // Was 'draft-status' (actual component ID is 'draft-info')
+};
 
 jest.mock('../services/api', () => ({
   searchPowerByPoin: jest.fn(),
@@ -21,14 +40,12 @@ jest.mock('../services/offlineStorage', () => ({
 
 const mockNavigate = jest.fn();
 jest.mock('react-router-dom', () => ({
-  // keep all real exports except we stub useNavigate
   ...jest.requireActual('react-router-dom') as any,
   useNavigate: () => mockNavigate,
 }));
 
-// Mock date utilities if used in validation/default values
 jest.mock('../utils/dateUtils', () => ({
-  getDefaultExpiry: jest.fn(() => '01/01/2030'), // Ensure default expiry is consistent
+  getDefaultExpiry: jest.fn(() => '01/01/2030'),
   formatDate: jest.fn(date => date),
 }));
 
@@ -47,133 +64,122 @@ const mockPower = {
 const apiMock = api as jest.Mocked<typeof api>;
 const offlineMock = offlineStorage as jest.Mocked<typeof offlineStorage>;
 
-// -----------------------------------------------------------------
-
 describe('AssignPower Page', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
+  /**
+   * Helper function to perform a successful POIN search and wait for results to load.
+   */
   const setupWithSearchResult = async () => {
     apiMock.searchPowerByPoin.mockResolvedValue({
       success: true,
       data: mockPower,
     });
 
-    const utils = renderWithRouter(<AssignPower/>, '/assign-power');
-    const poinInput = utils.getByPlaceholderText('4-digit ID');
-    const findBtn = utils.getByText('Find');
+    renderWithRouter(<AssignPower/>, '/assign-power');
 
-    fireEvent.change(poinInput, {target: {value: '6001'}});
-    fireEvent.click(findBtn);
+    fireEvent.change(screen.getByTestId(SELECTORS.SEARCH_POIN_INPUT), {target: {value: '6001'}});
+    fireEvent.click(screen.getByTestId(SELECTORS.SEARCH_BUTTON));
 
-    await utils.findByDisplayValue('Flight');
-
-    return utils;
+    await screen.findByTestId(SELECTORS.POWER_NAME_DISPLAY);
   };
 
-  // --- Search Tests ---
-
+  /**
+   * Test case to verify that the power search function is called and results are displayed.
+   */
   test('searches and finds power', async () => {
     apiMock.searchPowerByPoin.mockResolvedValue({
       success: true,
       data: mockPower,
     });
 
-    const {getByPlaceholderText, getByText, findByDisplayValue} =
-      renderWithRouter(<AssignPower/>, '/assign-power');
+    renderWithRouter(<AssignPower/>, '/assign-power');
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.SEARCH_POIN_INPUT), {
       target: {value: '6001'},
     });
-    fireEvent.click(getByText('Find'));
+    fireEvent.click(screen.getByTestId(SELECTORS.SEARCH_BUTTON));
 
     await waitFor(() => {
       expect(apiMock.searchPowerByPoin).toHaveBeenCalledTimes(1);
       expect(apiMock.searchPowerByPoin).toHaveBeenCalledWith('6001');
     });
 
-    expect(await findByDisplayValue('Flight')).toBeTruthy();
+    expect(await screen.findByTestId(SELECTORS.POWER_NAME_DISPLAY)).toBeInTheDocument();
   });
 
+  /**
+   * Test case to verify the display of a "Not found" status when the API returns no data.
+   */
   test('shows "Not found" when power is not found', async () => {
     apiMock.searchPowerByPoin.mockResolvedValue({
       success: false,
       data: null,
     } as any);
 
-    const {getByPlaceholderText, getByText, findByText} = renderWithRouter(
+    renderWithRouter(
       <AssignPower/>,
       '/assign-power',
     );
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.SEARCH_POIN_INPUT), {
       target: {value: '1111'},
     });
-    fireEvent.click(getByText('Find'));
+    fireEvent.click(screen.getByTestId(SELECTORS.SEARCH_BUTTON));
 
-    expect(await findByText('Not found')).toBeTruthy();
+    expect(await screen.findByText('Not found')).toBeInTheDocument();
   });
 
+  /**
+   * Test case to verify the display of an "Error" status when the API call fails.
+   */
   test('shows "Error" when search throws', async () => {
     apiMock.searchPowerByPoin.mockRejectedValue(new Error('Network error'));
 
-    const {getByPlaceholderText, getByText, findByText} = renderWithRouter(
+    renderWithRouter(
       <AssignPower/>,
       '/assign-power',
     );
 
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
+    fireEvent.change(screen.getByTestId(SELECTORS.SEARCH_POIN_INPUT), {
       target: {value: '6001'},
     });
-    fireEvent.click(getByText('Find'));
+    fireEvent.click(screen.getByTestId(SELECTORS.SEARCH_BUTTON));
 
-    expect(await findByText('Error')).toBeTruthy();
+    expect(await screen.findByText('Error')).toBeInTheDocument();
   });
 
-  // --- Assignment Tests ---
+  /**
+   * Test case to validate assignment functionality, including duplicate checks and success flow.
+   */
+  test('validates and adds new player (duplicate, success)', async () => {
+    await setupWithSearchResult();
 
-  test('validates and adds new player (empty, duplicate, success)', async () => {
-    apiMock.searchPowerByPoin.mockResolvedValue({
-      success: true,
-      data: mockPower,
-    });
+    const assignBtn = screen.getByTestId(SELECTORS.ASSIGN_BUTTON);
+    const plinInput = screen.getByTestId(SELECTORS.NEW_PLIN_INPUT);
+
+    // Test duplicate PLIN
+    fireEvent.change(plinInput, {target: {value: '1234#12'}});
+    fireEvent.click(assignBtn);
+    expect(
+      await screen.findByTestId(SELECTORS.STATUS_MESSAGE),
+    ).toHaveTextContent('Player is already assigned.');
+
+    // Set mock response for successful update
     apiMock.updatePower.mockResolvedValue({
       success: true,
       data: {
         ...mockPower,
         assignments: [
           ...mockPower.assignments,
-          {plin: '8888#88', expiryDate: '01/01/2030'},
+          {plin: '8888#88', expiryDate: '01/01/2030'}, // Add the newly assigned player
         ],
       },
-    });
+    } as any);
 
-    const {
-      getByPlaceholderText,
-      getByText,
-      findByDisplayValue,
-      findByText,
-    } = renderWithRouter(<AssignPower/>, '/assign-power');
-
-    // Search
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
-      target: {value: '6001'},
-    });
-    fireEvent.click(getByText('Find'));
-    await findByDisplayValue('Flight');
-
-    const assignBtn = getByText('Assign');
-    const plinInput = getByPlaceholderText('1234#12');
-
-    // Duplicate check
-    fireEvent.change(plinInput, {target: {value: '1234#12'}});
-    fireEvent.click(assignBtn);
-    expect(
-      await findByText('Player is already assigned.'),
-    ).toBeTruthy();
-
-    // Success flow
+    // Test successful assignment
     fireEvent.change(plinInput, {target: {value: '8888#88'}});
     fireEvent.click(assignBtn);
 
@@ -188,62 +194,50 @@ describe('AssignPower Page', () => {
       );
     });
 
-    expect(await findByText('Assigned 8888#88')).toBeTruthy();
+    expect(await screen.findByTestId(SELECTORS.STATUS_MESSAGE)).toHaveTextContent('Assigned 8888#88');
   });
 
+  /**
+   * Test case to check for validation errors on invalid PLIN and expiry date formats.
+   */
   test('shows validation errors for invalid PLIN and expiry date', async () => {
     await setupWithSearchResult();
 
-    const plinInput = screen.getByPlaceholderText('1234#12');
-    const expiryInput = screen.getByPlaceholderText('dd/mm/yyyy');
-    const assignBtn = screen.getByText('Assign');
+    const plinInput = screen.getByTestId(SELECTORS.NEW_PLIN_INPUT);
+    const expiryInput = screen.getByTestId(SELECTORS.NEW_EXPIRY_INPUT);
+    const assignBtn = screen.getByTestId(SELECTORS.ASSIGN_BUTTON);
 
-    // Invalid PLIN
+    // Test invalid PLIN format
     fireEvent.change(plinInput, {target: {value: '123#'}});
     fireEvent.click(assignBtn);
     expect(
-      await screen.findByText('PLIN format: 1234#12'),
-    ).toBeTruthy();
+      await screen.findByTestId(SELECTORS.STATUS_MESSAGE),
+    ).toHaveTextContent('PLIN format: 1234#12');
 
-    // Valid PLIN, invalid expiry
+    // Test invalid Expiry Date format
     fireEvent.change(plinInput, {target: {value: '7777#77'}});
     fireEvent.change(expiryInput, {target: {value: '01/01/20'}});
     fireEvent.click(assignBtn);
 
     expect(
-      await screen.findByText('Invalid Expiry Date format.'),
-    ).toBeTruthy();
+      await screen.findByTestId(SELECTORS.STATUS_MESSAGE),
+    ).toHaveTextContent('Invalid Expiry Date format.');
   });
 
-  // --- Removal Tests ---
-
+  /**
+   * Test case to verify that selected players are correctly removed via the API.
+   */
   test('removes selected players', async () => {
-    apiMock.searchPowerByPoin.mockResolvedValue({
-      success: true,
-      data: mockPower,
-    });
-    apiMock.updatePower.mockResolvedValue({
-      success: true,
-      data: {...mockPower, assignments: []},
-    });
+    await setupWithSearchResult();
 
-    const {getByPlaceholderText, getByText, findByDisplayValue} =
-      renderWithRouter(<AssignPower/>, '/assign-power');
-
-    // Search
-    fireEvent.change(getByPlaceholderText('4-digit ID'), {
-      target: {value: '6001'},
-    });
-    fireEvent.click(getByText('Find'));
-    await findByDisplayValue('Flight');
-
-    // Open remove dropdown and select all
-    const filterInput = getByPlaceholderText('Filter players to remove...');
+    const filterInput = screen.getByTestId(SELECTORS.REMOVE_FILTER_INPUT);
     fireEvent.focus(filterInput);
-    await waitFor(() => getByText('Select All'));
-    fireEvent.click(getByText('Select All'));
 
-    const removeBtn = getByText(/Remove Selected/);
+    // Use SELECTORS for "Select All" button
+    await waitFor(() => screen.getByTestId(SELECTORS.REMOVE_SELECT_ALL_BUTTON));
+    fireEvent.click(screen.getByTestId(SELECTORS.REMOVE_SELECT_ALL_BUTTON));
+
+    const removeBtn = screen.getByTestId(SELECTORS.REMOVE_SELECTED_BUTTON);
     fireEvent.click(removeBtn);
 
     await waitFor(() => {
@@ -253,14 +247,20 @@ describe('AssignPower Page', () => {
     });
   });
 
+  /**
+   * Test case to verify that the remove button is disabled when no players are selected for removal.
+   */
   test('remove button is disabled when no players are selected', async () => {
     await setupWithSearchResult();
 
-    const removeBtn = screen.getByText(/Remove Selected/) as HTMLButtonElement;
+    const removeBtn = screen.getByTestId(SELECTORS.REMOVE_SELECTED_BUTTON) as HTMLButtonElement;
     expect(removeBtn).toBeDisabled();
   });
 
-  test('restores draft state correctly', () => {
+  /**
+   * Test case to confirm that the draft state is correctly restored on load.
+   */
+  test('restores draft state correctly', async () => {
     const DRAFT_ID = 'draft-test';
     const draftData = {
       power: mockPower,
@@ -269,7 +269,7 @@ describe('AssignPower Page', () => {
       selectedRemovePlins: ['1234#12'],
     };
 
-    const {getByDisplayValue, getByText} = renderWithRouter(
+    renderWithRouter(
       <AssignPower/>,
       '/assign-power',
       {
@@ -279,29 +279,28 @@ describe('AssignPower Page', () => {
       },
     );
 
-    expect(getByDisplayValue('Flight')).toBeTruthy();
-    expect(getByDisplayValue('7777#77')).toBeTruthy();
-    expect(getByText('1 Selected')).toBeTruthy();
-    expect(screen.getByText('(Draft)')).toBeInTheDocument();
+    // Wait for the draft data to load and populate the fields
+    await waitFor(() => {
+      // POWER_NAME_DISPLAY (display-name) is an Input component, use toHaveValue
+      expect(screen.getByTestId(SELECTORS.POWER_NAME_DISPLAY)).toHaveValue('Flight');
+    });
+
+    expect(screen.getByTestId(SELECTORS.NEW_PLIN_INPUT)).toHaveValue('7777#77');
+    expect(screen.getByText('1 Selected')).toBeInTheDocument();
+    // Using the corrected DRAFT_STATUS (draft-info) data-testid
+    expect(screen.getByTestId(SELECTORS.DRAFT_STATUS)).toBeInTheDocument();
   });
 
+  /**
+   * Test case to verify that saving a draft calls the `saveStoredChange` offline storage function
+   * with the correct payload.
+   */
   test('saving draft saves state to offlineStorage', async () => {
-    const draftData = {
-      power: mockPower,
-      newOwner: '',
-      newExpiry: '01/01/2030',
-      selectedRemovePlins: [] as string[],
-    };
+    await setupWithSearchResult();
 
-    const {getByText} = renderWithRouter(
-      <AssignPower/>,
-      '/assign-power',
-      {initialData: draftData},
-    );
-
-    const plinInput = screen.getByPlaceholderText('1234#12');
+    const plinInput = screen.getByTestId(SELECTORS.NEW_PLIN_INPUT);
     fireEvent.change(plinInput, {target: {value: '9999#99'}});
-    fireEvent.click(getByText('Save Draft'));
+    fireEvent.click(screen.getByTestId(SELECTORS.SAVE_DRAFT_BUTTON));
 
     await waitFor(() => {
       expect(offlineMock.saveStoredChange).toHaveBeenCalledTimes(1);
@@ -321,6 +320,10 @@ describe('AssignPower Page', () => {
     );
   });
 
+  /**
+   * Test case to verify that a successful API update, initiated from a draft,
+   * triggers the deletion of that draft from offline storage.
+   */
   test('successful assignment of a DRAFT deletes the draft from storage', async () => {
     const DRAFT_ID = 'power-draft-123';
     apiMock.updatePower.mockResolvedValue({
@@ -331,7 +334,6 @@ describe('AssignPower Page', () => {
       }
     });
 
-    // Load the component with draft data
     const draftData = {
       power: mockPower,
       newOwner: '7777#77',
@@ -339,7 +341,7 @@ describe('AssignPower Page', () => {
       selectedRemovePlins: [] as string[],
     };
 
-    const {getByText, findByText, queryByText} = renderWithRouter(
+    renderWithRouter(
       <AssignPower/>,
       '/assign-power',
       {
@@ -349,17 +351,19 @@ describe('AssignPower Page', () => {
       }
     );
 
-    expect(getByText('(Draft)')).toBeInTheDocument();
+    expect(screen.getByTestId(SELECTORS.DRAFT_STATUS)).toBeInTheDocument();
 
-    fireEvent.click(getByText('Assign'));
-    await waitFor(() => getByText('Process Draft?'));
+    fireEvent.click(screen.getByTestId(SELECTORS.ASSIGN_BUTTON));
 
-    fireEvent.click(getByText('Process'));
+    await waitFor(() => screen.getByText('Process Draft?'));
+    fireEvent.click(screen.getByText('Process'));
+
     await waitFor(() => {
       expect(apiMock.updatePower).toHaveBeenCalledTimes(1);
     });
+
     expect(offlineMock.deleteStoredChange).toHaveBeenCalledWith(DRAFT_ID);
-    expect(await findByText('Assigned 7777#77')).toBeInTheDocument();
-    expect(queryByText('(Draft)')).toBeNull();
+    expect(await screen.findByTestId(SELECTORS.STATUS_MESSAGE)).toHaveTextContent('Assigned 7777#77');
+    expect(screen.queryByTestId(SELECTORS.DRAFT_STATUS)).toBeNull();
   });
 });
