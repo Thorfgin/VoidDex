@@ -770,7 +770,7 @@ const AssignCondition: React.FC = () => {
                   >
                     <FileText size={16} className="mr-2"/> Save Draft
                   </Button>
-                  <span data-testid="is-unsaved-status" className="sr-only">{isUnsaved ? "Unsaved" : "Saved"}</span>
+                  <span data-testid="draft-info" className="sr-only">{isUnsaved ? "Unsaved" : "Saved"}</span>
                 </div>
 
               </div>

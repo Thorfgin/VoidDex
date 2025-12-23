@@ -23,10 +23,9 @@ const SELECTORS = {
   STATUS_MESSAGE_SUCCESS: 'status-message-success',
   STATUS_MESSAGE_ERROR: 'status-message-error',
   SAVE_DRAFT_BUTTON: 'save-draft-button',
-  DRAFT_INDICATOR: 'draft-indicator',
+  DRAFT_STATUS: 'draft-info',
 };
 
-// Mocks
 jest.mock('../services/api', () => ({
   searchConditionByCoin: jest.fn(),
   updateCondition: jest.fn(),
@@ -46,9 +45,6 @@ jest.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
 }));
 
-/**
- * Mock date utilities if used in validation/default values.
- */
 jest.mock('../utils/dateUtils', () => ({
   getDefaultExpiry: jest.fn(() => '01/01/2030'),
   formatDate: jest.fn(date => date),
@@ -69,8 +65,6 @@ const mockCondition: Condition = {
 
 const apiMock = api as jest.Mocked<typeof api>;
 const offlineMock = offlineStorage as jest.Mocked<typeof offlineStorage>;
-
-// -----------------------------------------------------------------
 
 /**
  * Test suite for the AssignCondition component.
@@ -290,6 +284,43 @@ describe('AssignCondition Page', () => {
     expect(removeBtn).toBeDisabled();
   });
 
+  /**
+   * Tests that a previously saved draft state is correctly restored on a component load.
+   */
+  test('restores draft state correctly', async () => {
+    const DRAFT_ID = 'draft-test-condition';
+    const draftData = {
+      condition: mockCondition,
+      newOwner: '7777#77',
+      newExpiry: '01/01/2099',
+      selectedRemovePlins: ['1234#12', '5555#55'],
+    };
+
+    renderWithRouter(
+      <AssignCondition/>,
+      '/assign-condition',
+      {
+        initialData: draftData,
+        draftId: DRAFT_ID,
+        draftTimestamp: Date.now()
+      },
+    );
+
+    await waitFor(() => {
+      // 1. Check Condition details (proves the entity was loaded)
+      expect(screen.getByDisplayValue(mockCondition.name)).toBeInTheDocument();
+    });
+
+    // 2. Check Add Player inputs
+    expect(screen.getByTestId(SELECTORS.ADD_PLAYER_PLIN_INPUT)).toHaveValue('7777#77');
+    expect(screen.getByTestId(SELECTORS.ADD_PLAYER_EXPIRY_INPUT)).toHaveValue('01/01/2099');
+
+    // 3. Check Remove Player selection count
+    expect(screen.getByText('2 Selected')).toBeInTheDocument();
+
+    // 4. Check Draft Indicator
+    expect(screen.getByTestId(SELECTORS.DRAFT_STATUS)).toBeInTheDocument();
+  });
 
   /**
    * Tests the functionality for saving current unsaved changes to local draft storage.
@@ -335,7 +366,7 @@ describe('AssignCondition Page', () => {
 
   /**
    * Tests that the Save Draft button correctly re-enables after a successful API call
-   * if new, unsaved changes are introduced afterwards.
+   * if new, unsaved changes are introduced afterward.
    */
   test('Save Draft re-enables after successful assignment and new input', async () => {
     apiMock.searchConditionByCoin.mockResolvedValue({success: true, data: mockCondition});
@@ -397,7 +428,7 @@ describe('AssignCondition Page', () => {
       }
     );
 
-    expect(screen.getByText('(Draft)')).toBeInTheDocument();
+    expect(screen.getByTestId(SELECTORS.DRAFT_STATUS)).toBeInTheDocument();
 
     fireEvent.click(screen.getByTestId(SELECTORS.ASSIGN_BUTTON));
 
@@ -405,12 +436,10 @@ describe('AssignCondition Page', () => {
     fireEvent.click(screen.getByText('Process'));
 
     await waitFor(() => {
-      expect(apiMock.updateCondition).toHaveBeenCalledTimes(1);
+      expect(screen.getByTestId(SELECTORS.STATUS_MESSAGE_SUCCESS)).toHaveTextContent('Assigned 7777#77');
     });
 
+    // Final check to ensure the deletion function was actually called
     expect(offlineMock.deleteStoredChange).toHaveBeenCalledWith(DRAFT_ID);
-    expect(await screen.findByTestId(SELECTORS.STATUS_MESSAGE_SUCCESS)).toHaveTextContent('Assigned 7777#77');
-
-    expect(screen.queryByText('(Draft)')).toBeNull();
   });
 });

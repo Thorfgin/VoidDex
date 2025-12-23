@@ -9,20 +9,20 @@ import {renderWithRouter} from '../utils/testUtils';
  * NOTE: These selectors are updated to match the data-testid attributes in AssignPower.tsx.
  */
 const SELECTORS = {
-  SEARCH_POIN_INPUT: 'input-poin-search', // Was 'search-poin-input'
-  SEARCH_BUTTON: 'btn-find-power',       // Was 'search-button'
-  POWER_NAME_DISPLAY: 'display-name',     // Was 'power-name-display'
-  POWER_DESCRIPTION_DISPLAY: 'display-description', // Was 'power-description-display'
-  ASSIGN_BUTTON: 'btn-assign-player',     // Was 'assign-button'
-  NEW_PLIN_INPUT: 'input-new-owner-plin', // Was 'new-plin-input'
-  NEW_EXPIRY_INPUT: 'input-new-owner-expiry', // Was 'new-expiry-input'
-  REMOVE_FILTER_INPUT: 'input-remove-filter', // Was 'remove-filter-input'
-  REMOVE_SELECT_ALL_BUTTON: 'btn-toggle-select-all-filtered', // Was 'remove-select-all-button'
-  REMOVE_SELECTED_BUTTON: 'btn-remove-selected', // Was 'remove-selected-button'
-  SAVE_DRAFT_BUTTON: 'btn-save-draft',    // Was 'save-draft-button'
-  DRAFT_PROCESS_BUTTON: 'draft-process-button', // Still unused, keeping key
+  SEARCH_POIN_INPUT: 'input-poin-search',
+  SEARCH_BUTTON: 'btn-find-power',
+  POWER_NAME_DISPLAY: 'display-name',
+  POWER_DESCRIPTION_DISPLAY: 'display-description',
+  ASSIGN_BUTTON: 'btn-assign-player',
+  NEW_PLIN_INPUT: 'input-new-owner-plin',
+  NEW_EXPIRY_INPUT: 'input-new-owner-expiry',
+  REMOVE_FILTER_INPUT: 'input-remove-filter',
+  REMOVE_SELECT_ALL_BUTTON: 'btn-toggle-select-all-filtered',
+  REMOVE_SELECTED_BUTTON: 'btn-remove-selected',
+  SAVE_DRAFT_BUTTON: 'btn-save-draft',
+  DRAFT_PROCESS_BUTTON: 'draft-process-button',
   STATUS_MESSAGE: 'status-message',
-  DRAFT_STATUS: 'draft-info',             // Was 'draft-status' (actual component ID is 'draft-info')
+  DRAFT_STATUS: 'draft-info',
 };
 
 jest.mock('../services/api', () => ({
@@ -258,7 +258,7 @@ describe('AssignPower Page', () => {
   });
 
   /**
-   * Test case to confirm that the draft state is correctly restored on load.
+   * Test case to confirm that the draft state is correctly restored on a load.
    */
   test('restores draft state correctly', async () => {
     const DRAFT_ID = 'draft-test';
